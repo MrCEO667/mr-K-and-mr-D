@@ -1,0 +1,62 @@
+# Copy to config/config.yaml. Secrets live in .env, never here.
+
+budget:
+  max_setup_usd: 100          # hard gate
+  min_margin_multiple: 3.0    # price / cost_per_sale, e.g. 3.0 = "3x"
+  max_ttfd_days: 7            # estimated days to first dollar
+  max_validation_usd: 20      # the "cheap test" bar from SPEC.md
+  max_validation_hours: 3
+
+scoring:
+  weights:                    # feasibility is a GATE, not a weight
+    durability: 0.45
+    saturation: 0.35
+    relevance: 0.20
+  durability_horizon: 60      # which head drives the composite: 30|60|90
+  saturation_thresholds:      # raw supply count -> label
+    low_max: 200
+    med_max: 2000
+
+model:
+  label_threshold: 0.6        # elevated = >= 60% of window peak; sweep in M5
+  window_days: 14
+  min_train_windows: 2000
+  temporal_split_date: "auto" # auto = last 20% of time range
+  fallback: momentum          # used when model file missing or worse than momentum
+
+alerts:
+  max_per_day: 12
+  rescore_delta: 0.15         # re-alert only if composite moves this much
+  quiet_hours: [23, 8]
+  min_composite: 0.55
+
+discovery:
+  max_new_terms_per_run: 50
+  harvest_sources: [reddit, product_hunt, github, youtube, tikwm, hackernews]
+  stopwords_file: config/stopwords.txt
+
+schedule:
+  watchlist_minutes: 60
+  sweep_hour: 3
+  saturation_hour: 4
+  retrain_weekday: 6          # Sunday
+  backtest_after_retrain: true
+
+sources:                      # disable anything that breaks; run degrades
+  google_trends: {enabled: true,  rate_limit_s: 4}
+  youtube:       {enabled: true,  daily_quota_units: 10000}
+  reddit:        {enabled: true,  rate_limit_s: 1}
+  product_hunt:  {enabled: true}
+  github:        {enabled: true}
+  tikwm:         {enabled: true,  note: "unofficial mirror, degrade never fail"}
+  hackernews:    {enabled: true}
+
+llm:
+  provider: ollama
+  base_url: http://localhost:11434
+  model: qwen3:8b
+  timeout_s: 120
+  max_retries: 2
+
+db:
+  path: data/radar.db

@@ -1,0 +1,57 @@
+# Discovery seeds. Broad trend sweeps surface thousands of rising things a
+# two-person team cannot monetize — the predecessor project lost 250 of 395
+# candidates to relevance, not to virality. Seeding toward monetizable
+# categories is the fix. Harvest widens from here; seeds keep it anchored.
+
+categories:
+  ai_tools:
+    - ai voice clone
+    - ai avatar generator
+    - ai transcription
+    - llm wrapper
+    - prompt pack
+    - ai video editing
+
+  digital_products:
+    - notion template
+    - obsidian plugin
+    - figma ui kit
+    - lightroom preset
+    - resume template
+    - spreadsheet template
+
+  services:
+    - faceless youtube
+    - short form editing
+    - podcast editing
+    - seo audit
+    - landing page design
+
+  dev_tools:
+    - github action
+    - vscode extension
+    - chrome extension
+    - api wrapper
+    - discord bot
+
+  content:
+    - newsletter niche
+    - micro saas
+    - lead magnet
+
+subreddits:
+  - entrepreneur
+  - juststart
+  - SideProject
+  - SaaS
+  - EntrepreneurRideAlong
+  - smallbusiness
+  - Flipping
+  - passive_income
+
+# Terms matching these are dropped at discovery. Keep current.
+# Financial instruments are excluded by design — see PROMPT.md "What not to build".
+exclude_patterns:
+  - "\\b(coin|token|crypto|nft|forex|ticker|\\$[A-Z]{2,5})\\b"
+  - "\\b(casino|betting|gambling)\\b"
+  - "\\b(mlm|dropship guru|get rich)\\b"

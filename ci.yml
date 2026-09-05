@@ -1,0 +1,27 @@
+name: CI
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Schema must apply cleanly
+        run: python -c "import sqlite3;sqlite3.connect(':memory:').executescript(open('schema/schema.sql').read());print('schema ok')"
+
+# NOTE: CI only. The pipeline itself runs locally — the composer needs Ollama
+# and a GPU, neither of which exists on a hosted runner. See docs/DECISIONS.md #4.

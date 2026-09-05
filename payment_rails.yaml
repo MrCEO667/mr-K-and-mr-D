@@ -1,0 +1,31 @@
+# Which rails you can actually RECEIVE money through.
+#
+# This was deliberately deferred ("an agent will handle it later"), so v1 does
+# NOT hard-gate on it. But it stays in the loop, because a playbook you cannot
+# collect on is a playbook that fails on day one — and that is the single most
+# common reason a "first sale today" plan does not produce a first sale.
+#
+# Behaviour: `enforce: false` means every card still prints the rail it needs
+# on its Requirements line, so you can check manually before spending time.
+# Flip `enforce: true` once you know your real list and the gate turns on.
+
+enforce: false
+
+available:
+  - unknown                   # placeholder while undecided
+
+candidates:                   # commonly usable from KZ; verify before relying
+  - gumroad
+  - lemon_squeezy
+  - payoneer
+  - wise
+  - crypto_usdt
+  - fiverr_payout             # platform handles collection for you
+  - upwork_payout
+  - kaspi                     # local, offline/hybrid plays
+
+notes: |
+  Stripe is not directly available in Kazakhstan.
+  Marketplace payouts (Fiverr, Upwork, Gumroad) are the lowest-friction start
+  because the platform collects on your behalf — worth weighting toward these
+  in early playbooks.

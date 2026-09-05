@@ -1,0 +1,45 @@
+# What this team can actually deliver. Second hard gate after budget.
+# Inferred from the predecessor project plus "anything buildable with an AI
+# coding agent". EDIT THIS — a wrong entry here produces confidently
+# unbuildable suggestions.
+
+can_build:
+  - python_backend
+  - web_scraping
+  - telegram_bots
+  - discord_bots
+  - api_integrations
+  - local_llm_pipelines
+  - video_processing          # ffmpeg, subtitles, dubbing — proven in Retrend
+  - tts_and_voice_cloning
+  - data_pipelines
+  - ml_models
+  - static_websites
+  - landing_pages
+  - browser_extensions
+  - digital_products          # templates, presets, prompt packs, datasets
+  - written_content
+  - automation_scripts
+
+cannot_build:
+  - physical_manufacturing
+  - inventory_holding         # incompatible with a $100 cap
+  - anything_needing_licensing
+  - anything_needing_employees
+  - mobile_native             # unless a milestone changes this
+  - hardware
+
+team:
+  size: 2
+  hours_per_week: 40          # combined; edit to reality
+  ai_coding_agent: true       # raises the ceiling on build complexity
+  languages: [en, ru, kk]
+
+# Delivery models we can actually execute
+delivery_models:
+  - saas_micro
+  - one_off_service           # Fiverr / Upwork
+  - digital_download          # Gumroad / Payhip
+  - content_monetization
+  - api_wrapper
+  - automation_as_a_service
