@@ -4,7 +4,8 @@ A local opportunity scanner. It watches public trend data, scores rising niches
 on **durability**, **saturation** and **feasibility**, and pushes the survivors
 to Telegram as costed, evidenced playbooks.
 
-Built by Mr K and Mr D. Single operator, $0 running cost, everything local.
+Built by Mr K and Mr D. Two operators in one Telegram group, $0 running cost,
+everything local.
 
 ## What it does and doesn't do
 
@@ -49,6 +50,10 @@ pip install -r requirements.txt
 
 cp .env.example .env                        # fill in the keys
 cp config/config.example.yaml config/config.yaml
+
+# Telegram: @BotFather /newbot, then create a supergroup with both operators
+# and the bot in it, send /hello from each, and run:
+python scripts/telegram_setup.py            # prints the chat ID + operator IDs
 
 ollama pull qwen3:8b                        # ~5GB, fits the 2080's 8GB
 python -c "import sqlite3;sqlite3.connect('data/radar.db').executescript(open('schema/schema.sql').read())"
