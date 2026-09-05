@@ -52,6 +52,11 @@ class Config:
     data: dict[str, Any]
     path: Path
     operators: list[Operator] = field(default_factory=list)
+    # The environment this config was resolved against. Held rather than read
+    # from os.environ later, so a caller passing an explicit environ gets an
+    # answer about *that* environment -- otherwise tests silently consult the
+    # developer's own .env and stop testing anything.
+    environ: dict[str, str] = field(default_factory=dict)
 
     def __getitem__(self, section: str) -> Any:
         return self.data[section]
@@ -88,7 +93,7 @@ class Config:
         """Enabled sources mapped to the env vars they need and do not have."""
         missing: dict[str, list[str]] = {}
         for source in self.enabled_sources():
-            absent = [k for k in SOURCE_SECRETS.get(source, ()) if not os.environ.get(k)]
+            absent = [k for k in SOURCE_SECRETS.get(source, ()) if not self.environ.get(k)]
             if absent:
                 missing[source] = absent
         return missing
@@ -177,9 +182,20 @@ def load(path: Path | str | None = None, *, environ: dict[str, str] | None = Non
         raise ConfigError(
             f"{cfg_path} not found. Copy config/config.example.yaml to config/config.yaml."
         )
-    load_dotenv()
+
+    if environ is None:
+        # Real run: .env feeds the process environment.
+        load_dotenv()
+        resolved = dict(os.environ)
+    else:
+        # Explicit environment: use exactly what the caller gave, and do not
+        # let a local .env leak into it.
+        resolved = dict(environ)
+
     data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
         raise ConfigError(f"{cfg_path} did not parse to a mapping.")
-    _apply_env_overrides(data, dict(environ if environ is not None else os.environ))
-    return Config(data=data, path=cfg_path, operators=_parse_operators(data))
+    _apply_env_overrides(data, resolved)
+    return Config(
+        data=data, path=cfg_path, operators=_parse_operators(data), environ=resolved
+    )

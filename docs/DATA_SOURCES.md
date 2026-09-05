@@ -38,9 +38,24 @@ Two consequences worth remembering:
    Batches mixing a 32-mean term with a 2-mean term will always quantise the
    small one coarsely. Revisit if M5 finds the low-volume terms too noisy.
 
-### YouTube Data API v3 — official, free
+### YouTube Data API v3 — official, free — **LIVE**
 10,000 quota units/day. `search.list` costs 100 units, so ~90 searches/day.
 Budget it: `videos.list` is 1 unit, so search once and batch-hydrate.
+
+Measured on the first live sweep: **2,505 units for 25 terms** (25 searches at
+100, plus 5 hydrate calls covering 250 video ids at 50 per call). That is three
+sweeps a day, and a fourth does not fit. Adding terms costs 100 units each, so
+the seed list and the sweep cadence trade against each other directly.
+
+Two metrics, unequal in trustworthiness:
+
+- `view_sum` — summed views of the top ten videos in the window. Counted, real.
+- `video_count` — `totalResults` from search, which is an **estimate** and
+  routinely inflated ("ai voice clone" reports 23,581). Its movement is
+  informative; its absolute value is not a count of anything. Never render it
+  on a card as one.
+
+Since tikwm died (decision 19), this is the **only video demand source**.
 
 > Retrend implemented this fully and got **zero rows** because no API key was
 > ever provisioned. The code was fine; the key was missing. Provision the key

@@ -22,6 +22,7 @@ from .collectors.github import GitHubCollector
 from .collectors.hackernews import HackerNewsCollector
 from .collectors.http import JsonHttp
 from .collectors.trends import TrendsCollector
+from .collectors.youtube import YouTubeCollector
 
 # Stages still to land keep their place in the list so the shape of a run is
 # visible from the logs before the code exists.
@@ -105,6 +106,17 @@ def build_collectors(cfg: config_module.Config, *, cache: Cache | None = None) -
                 http=JsonHttp(
                     HackerNewsCollector.source,
                     rate_limiter=RateLimiter(min_interval_s=1.0),
+                    cache=shared_cache,
+                )
+            )
+        )
+
+    if "youtube" in enabled:
+        collectors.append(
+            YouTubeCollector(
+                http=JsonHttp(
+                    YouTubeCollector.source,
+                    rate_limiter=RateLimiter(min_interval_s=0.5),
                     cache=shared_cache,
                 )
             )

@@ -12,6 +12,20 @@ import urllib.request
 
 import pytest
 
+from radar import config as config_module
+
+
+@pytest.fixture(autouse=True)
+def no_local_dotenv(monkeypatch):
+    """Tests must not read the developer's .env.
+
+    Once a real YOUTUBE_API_KEY existed locally, load_dotenv put it back after
+    monkeypatch.delenv and the "refuses to run without credentials" tests
+    asserted nothing -- they passed on this machine and would have passed in CI
+    for the opposite reason.
+    """
+    monkeypatch.setattr(config_module, "load_dotenv", lambda *a, **kw: None)
+
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
