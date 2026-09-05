@@ -89,4 +89,11 @@ The predecessor project is why several decisions here look the way they do.
 
 ## Status
 
-Planning complete. No code yet — M0 is the first build step.
+M0 landed: config loader, SQLite init, structured logging with a run_id, and
+`--once` / `--dry-run` on the entry point.
+
+```bash
+python -m radar --once --dry-run     # proves the wiring, writes nothing
+```
+
+M1 (Google Trends collector) is next, and is the one that must not be rushed.
