@@ -23,6 +23,7 @@ commit as the code.
 | 14 | Public repo. | Unlimited Actions minutes for CI. No secrets in the repo — `.env` is gitignored. |
 | 15 | English docs, Python + SQLite. | Confirmed. |
 | 16 | One shared Telegram **supergroup** for both operators, not two private chats. | Cards deliver once and both see the same evidence; discussion sits next to the card. Two DMs would double alert volume and split the label set across chats with no join key. |
+| 18 | Google Trends readings are rescaled against a fixed anchor term, `wordpress plugin`, and a flat-zero series is refused rather than stored. | Trends values are relative within one request, so raw numbers from different requests share no scale. The anchor must be volume-comparable: against `weather`, every seed term read 0 for a full quarter, which stores as silence and is indistinguishable from no demand. Changing the anchor makes new readings incomparable with old ones. |
 | 17 | Decisions and outcomes record `actor_tg_id`. Operators are allowlisted in `config.yaml`. | Two humans label one training set. Without an actor column M9 learns the average of two different tastes and can never be told they disagree. The allowlist exists because anyone added to a group can otherwise command the bot. |
 
 ## Open — defaults chosen, implement the default, revisit later
@@ -34,6 +35,7 @@ commit as the code.
 | C | Label threshold (0.6 of window peak) | 0.6 | Sweep during M5, record the winner in `docs/MODEL.md` |
 | D | Composite weights | 0.45 / 0.35 / 0.20 | After the relevance model activates at 100 decisions |
 | E | Workload split | None. Contracts + issue-claiming instead. | If merge conflicts start costing real time |
+| H | Low-volume terms quantised to mostly zeros | Store them; the flat-zero guard only rejects an *entirely* zero series. First live sweep: `newsletter niche` came back 78/92 zeros (mean 0.0035), `short form editing` 56/92. | M5 training. If these terms are unusable, either give them their own low-volume batch with a smaller anchor (chained normalisation) or drop them from seeds. |
 | G | Conflicting labels from the two operators | `decision_mode: first_wins` — first tap settles the card, a later opposing tap is reported in-chat, not overwritten | If disagreement is frequent enough to matter, or M9 accuracy splits by actor |
 | F | Handling of failed attempts as negative data | Deferred. Saturation is the honest partial mitigation. | If `outcomes` shows the estimates are systematically optimistic |
 

@@ -96,4 +96,15 @@ M0 landed: config loader, SQLite init, structured logging with a run_id, and
 python -m radar --once --dry-run     # proves the wiring, writes nothing
 ```
 
-M1 (Google Trends collector) is next, and is the one that must not be rushed.
+M1 landed: Google Trends collector, anchored and rate limited, writing
+append-only `signal_snapshots`.
+
+```bash
+python -m radar --once                       # collect
+python -m radar.report --term "faceless youtube"
+```
+
+First live sweep: 1932 snapshots across 21 terms, 92 days of history each.
+
+M2 (the rest of the collectors) is next and needs the YouTube, Reddit and
+Product Hunt keys.

@@ -9,6 +9,7 @@ row behind, however a downstream module misbehaves.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 import uuid
@@ -135,3 +136,64 @@ def record_source_health(
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (source, run_id, status, latency_ms, error_count, message, now()),
     )
+
+
+def write_readings(conn: sqlite3.Connection, run_id: str, readings) -> int:
+    """Append signal_snapshots rows. Returns how many were actually new.
+
+    This table is append-only: never UPDATE, never DELETE. Two points are the
+    minimum for velocity and many are needed for durability, which is the
+    lesson Retrend paid for by storing a single snapshot and being unable to
+    compute anything at all.
+
+    A re-run covering the same window is normal -- Trends returns history on
+    every call -- so the unique index absorbs repeats and the count reflects
+    genuinely new observations rather than work done.
+    """
+    written = 0
+    for r in readings:
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO signal_snapshots "
+            "(term_id, source, metric, value, ts, run_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (r.term_id, r.source, r.metric, r.value, r.ts, run_id),
+        )
+        written += cursor.rowcount or 0
+    return written
+
+
+def write_evidence(conn: sqlite3.Connection, run_id: str, items) -> int:
+    """Evidence rows are what /why shows the operator, so they carry the run
+    that produced them and stay traceable back to a source URL."""
+    written = 0
+    for item in items:
+        conn.execute(
+            "INSERT INTO evidence "
+            "(term_id, source, url, title, snippet, metric_json, ts, run_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                item.term_id,
+                item.source,
+                item.url,
+                item.title,
+                item.snippet,
+                json.dumps(item.metric_json) if item.metric_json is not None else None,
+                now(),
+                run_id,
+            ),
+        )
+        written += 1
+    return written
+
+
+def series(conn: sqlite3.Connection, term: str, *, source: str | None = None):
+    """The time series for one term, oldest first. Used by radar.report."""
+    sql = (
+        "SELECT s.ts, s.source, s.metric, s.value, s.run_id "
+        "FROM signal_snapshots s JOIN terms t ON t.id = s.term_id "
+        "WHERE t.term = ? OR t.normalized = ?"
+    )
+    params: list[object] = [term, term.lower().strip()]
+    if source:
+        sql += " AND s.source = ?"
+        params.append(source)
+    return conn.execute(sql + " ORDER BY s.ts", params).fetchall()

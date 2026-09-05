@@ -15,9 +15,28 @@ call**. That is what makes the durability model trainable on day one instead of
 after six months of collection. Every other source gives you only "now".
 
 - Rate limited aggressively. Exponential backoff, 1 req / 3–5 s, cache hard.
+  4 s was not enough in practice; 8 s got a full sweep through with one batch
+  lost to throttling.
 - Values are *relative* (0–100, normalized within the request) — never compare
   across separate requests without a shared anchor term. Use a fixed anchor.
 - 429s are routine. Treat as backoff, not as failure.
+
+**Anchor sizing, learned the hard way.** The anchor must sit in the same volume
+band as the terms. Measured against `weather`, every seed term in this project
+returned **0 for a full quarter** — Trends reports integers 0–100 normalized
+within the request, so a popular anchor rounds a niche term to nothing. That is
+indistinguishable from "no demand" once stored. The collector now refuses a
+flat-zero series instead of writing it, and the anchor is
+`wordpress plugin` (~43 mean against seeds of 2–32).
+
+Two consequences worth remembering:
+
+1. **The anchor must not be a seed term.** Trends rejects a request containing
+   the same keyword twice, and a term can only score 1.0 against itself. The
+   first live run lost a batch of four terms to exactly this.
+2. **Resolution is set by the largest term in the batch**, not by the anchor.
+   Batches mixing a 32-mean term with a 2-mean term will always quantise the
+   small one coarsely. Revisit if M5 finds the low-volume terms too noisy.
 
 ### YouTube Data API v3 — official, free
 10,000 quota units/day. `search.list` costs 100 units, so ~90 searches/day.
