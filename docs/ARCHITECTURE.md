@@ -81,8 +81,8 @@ radar/
 
 Three people, no formal ownership split. What keeps you out of each other's way:
 
-1. **One responsibility per file.** Never edit a file you did not open the
-   branch for.
+1. **One responsibility per file.** Two people editing one file is the
+   collision that trunk-based commits cannot absorb.
 2. **Contracts in `schema/contracts.md` are frozen.** Changing one is its own
    commit, made before any code depends on the change.
 3. **SQLite is the only shared state.** No module calls another module's

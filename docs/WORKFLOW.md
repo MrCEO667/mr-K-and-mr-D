@@ -10,8 +10,11 @@ pain.
 2. **One responsibility per file.** Don't edit a file you didn't claim.
 3. **Contracts are frozen.** Changing `schema/contracts.md` is its own commit,
    made *before* dependent code, with `contract:` in the message.
-4. **Branch per milestone:** `m3-discovery`, `m5-durability-model`.
-5. **No milestone merges without tests.**
+4. **Commit to `main`.** No feature branches — the two of us are not colliding
+   often enough to pay for them, and a branch that lives a week is worse than a
+   merge conflict. Keep commits small enough to revert one cleanly.
+5. **No milestone lands without tests.** `main` stays green; CI runs on every
+   push to it.
 6. **SQLite is the only shared state.** Layers talk through tables, never
    through each other's functions.
 
