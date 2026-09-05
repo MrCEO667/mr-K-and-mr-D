@@ -147,6 +147,13 @@ disagrees with the DB, discard the generation and retry. Assert this in tests.
 ### M8 — Telegram bot
 Long polling (`python-telegram-bot`), no webhook, no public IP.
 
+Delivers to one shared supergroup holding both operators. Reject any update
+whose `from.id` is not in `telegram.operators` (config), including callback
+queries — a group is joinable, so the allowlist is the whole access control.
+Every `decisions` and `outcomes` row is written with the tapping operator's
+`actor_tg_id`. Under `decision_mode: first_wins` a card already settled answers
+a second tap with who decided it and when, and writes nothing.
+
 Card format:
 
 ```
@@ -194,7 +201,8 @@ first; the point is to measure how wrong.
   tokens or tickers. If a harvested term is a financial instrument, drop it at
   the discovery stage — there is a stopword list for this, keep it current.
 - No web frontend. Telegram is the whole UI.
-- No accounts, auth or multi-tenancy. Single operator.
+- No accounts or auth beyond the operator allowlist, no multi-tenancy. Two
+  named operators sharing one group, not a user system.
 - No paid data source, ever, without an explicit decision recorded in
   `docs/DECISIONS.md`.
 - No scraping behind a login, and no circumventing a paywall or rate limit.

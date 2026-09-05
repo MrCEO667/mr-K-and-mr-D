@@ -24,6 +24,18 @@ model:
   temporal_split_date: "auto" # auto = last 20% of time range
   fallback: momentum          # used when model file missing or worse than momentum
 
+telegram:
+  # Two operators, one shared group. Secrets (token, chat id) live in .env.
+  # Only these user IDs may command the bot or label decisions -- anyone else
+  # added to the group is ignored. Discover IDs with scripts/telegram_setup.py.
+  operators:
+    - {id: 0, name: "Mr K"}
+    - {id: 0, name: "Mr D"}
+  reject_unknown_users: true   # false = read-only for non-operators
+  # Both operators see every card. First tap wins and is recorded with its
+  # author; a second tap on a settled card is reported, not overwritten.
+  decision_mode: first_wins    # first_wins | require_both
+
 alerts:
   max_per_day: 12
   rescore_delta: 0.15         # re-alert only if composite moves this much

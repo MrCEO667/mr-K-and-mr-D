@@ -115,8 +115,12 @@ CREATE TABLE IF NOT EXISTS decisions (
   action         TEXT NOT NULL,           -- watch | dismiss | pursue
   reason         TEXT,                    -- saturated | cant_build | cant_collect
                                           -- | low_margin | too_slow | not_interested
+  actor_tg_id    INTEGER NOT NULL,        -- which operator tapped; two humans
+  actor_name     TEXT NOT NULL,           -- label this set, and M9 must be able
+                                          -- to tell their taste apart
   ts             INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_decisions_actor ON decisions(actor_tg_id);
 
 -- ---------------------------------------------- outcomes = closing the loop
 CREATE TABLE IF NOT EXISTS outcomes (
@@ -127,6 +131,8 @@ CREATE TABLE IF NOT EXISTS outcomes (
   revenue_usd    REAL,
   days_to_first_sale INTEGER,
   notes          TEXT,
+  actor_tg_id    INTEGER NOT NULL,        -- who actually ran the test
+  actor_name     TEXT NOT NULL,
   ts             INTEGER NOT NULL
 );
 

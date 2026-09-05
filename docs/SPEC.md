@@ -123,6 +123,8 @@ M10 exists to measure how wrong they are.
 ## Delivery
 
 Telegram bot, long polling, local. Card format and commands in `PROMPT.md` M8.
+One shared supergroup, both operators, allowlisted by user ID. Decisions carry
+the actor who made them — see decisions 16 and 17.
 
 Cadence: hourly on the starred watchlist, daily broad discovery sweep.
 Suppression: alert once, re-alert only on a score move of `rescore_delta`.
@@ -130,7 +132,7 @@ Suppression: alert once, re-alert only on a score move of `rescore_delta`.
 ## Out of scope for v1
 
 - Trade, token or ticker recommendations — excluded by design, see PROMPT.md
-- Web UI, accounts, multi-user
+- Web UI, accounts, user management beyond the two-operator allowlist
 - Paid data sources
 - Physical/inventory business models
 - Auto-execution of anything. The tool suggests; the human acts.
