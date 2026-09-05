@@ -93,9 +93,31 @@ TikTok's official Research API needs academic affiliation. Creative Center went
 which now leaves **YouTube as the only video demand source** — one more reason
 the YouTube key matters.
 
-### Product Hunt — GraphQL, free tier
-Developer token, generous limits. Good for both demand (what launched, how it
-did) and supply (is someone already doing this).
+### Product Hunt — GraphQL v2 — **LIVE**
+App key + secret, exchanged for a token by `client_credentials`, so nothing
+expires by hand. The https redirect URI the form demands is never used.
+
+**There is no keyword search for posts.** Introspection, 2026-09-05: `posts`
+takes `featured, postedBefore, postedAfter, topic, order, twitterUrl, url,
+after, before, first, last`. Only `topics` takes a `query`, and topics are
+broad categories, not phrases. So the collector scans recent launches once and
+matches every term locally — cost is independent of the number of seeded terms,
+the opposite of YouTube.
+
+Measured limits:
+
+- page size caps at **20** whatever `first:` says
+- each page costs **200 complexity** of **6250 per 15 minutes**
+- 20 pages = 400 launches = 4000 complexity, leaving headroom. 30 pages did
+  not, and the first full sweep 429'd.
+
+The scan is cached for the day. A truncated scan is used but never cached —
+caching a short answer would freeze it in until midnight.
+
+**The signal is sparse.** Across 400 launches, exact phrases like
+`ai voice clone` and `notion template` both matched zero. Product Hunt answers
+"has anyone just launched this", and usually nobody has. Read a non-zero as
+meaningful and a zero as weak evidence, not as absence of demand.
 
 ### GitHub — repo search API, no key
 `/search/repositories` works unauthenticated at 10 req/min, which is enough and

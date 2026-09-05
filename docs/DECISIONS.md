@@ -39,6 +39,7 @@ commit as the code.
 | C | Label threshold (0.6 of window peak) | 0.6 | Sweep during M5, record the winner in `docs/MODEL.md` |
 | D | Composite weights | 0.45 / 0.35 / 0.20 | After the relevance model activates at 100 decisions |
 | E | Workload split | None. Contracts + issue-claiming instead. | If merge conflicts start costing real time |
+| I | Product Hunt matches are sparse | Store them; a zero means "nobody launched this exact phrase in 30 days", which is weak evidence rather than absence of demand. Across 400 launches both `ai voice clone` and `notion template` matched zero. | If M7 cards lean on `launch_count` and it is almost always zero, either widen the window past 30 days or drop it from the composite and keep it as evidence only. |
 | H | Low-volume terms quantised to mostly zeros | Store them; the flat-zero guard only rejects an *entirely* zero series. First live sweep: `newsletter niche` came back 78/92 zeros (mean 0.0035), `short form editing` 56/92. | M5 training. If these terms are unusable, either give them their own low-volume batch with a smaller anchor (chained normalisation) or drop them from seeds. |
 | G | Conflicting labels from the two operators | `decision_mode: first_wins` — first tap settles the card, a later opposing tap is reported in-chat, not overwritten | If disagreement is frequent enough to matter, or M9 accuracy splits by actor |
 | F | Handling of failed attempts as negative data | Deferred. Saturation is the honest partial mitigation. | If `outcomes` shows the estimates are systematically optimistic |

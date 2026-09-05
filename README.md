@@ -115,8 +115,8 @@ M2 and M4 are in as far as the credentials allow:
 | Hacker News | `post_count` | live |
 | GitHub | `stars` + repo count | live |
 | Gumroad | supply count | live |
-| Reddit | `post_count`, `score_sum` | written, needs a script app |
-| Product Hunt | `launch_count`, `vote_sum` | written, needs a developer token |
+| Reddit | `post_count`, `score_sum` | written, never run — needs a script app |
+| Product Hunt | `launch_count`, `vote_sum` | live |
 | tikwm | — | dead, see decision 19 |
 
 ```bash
