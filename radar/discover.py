@@ -85,3 +85,165 @@ def active_terms(conn: sqlite3.Connection, *, starred_only: bool = False) -> lis
         Term(id=r["id"], term=r["term"], normalized=r["normalized"], starred=bool(r["starred"]))
         for r in conn.execute(sql + " ORDER BY id")
     ]
+
+
+# --------------------------------------------------------------- harvest
+# Reddit's JSON API returns 403 without OAuth credentials, which is what bit
+# Retrend. The public RSS feeds still answer, so subreddit titles are usable
+# for term harvesting even while the API app cannot be created. Scores and
+# comment counts are not in RSS -- those still need OAuth.
+
+REDDIT_RSS = "https://www.reddit.com/r/{sub}/new/.rss"
+TITLE_RE = re.compile(r"<title>(.*?)</title>", re.DOTALL)
+STOP_WORDS = frozenset(
+    [
+        "a", "about", "after", "all", "also", "an", "and", "any", "are", "as", "at", "be",
+        "because", "been", "before", "being", "below", "best", "between", "both", "but", "by",
+        "can", "could", "did", "do", "does", "done", "each", "for", "from", "get", "got",
+        "guide", "help", "how", "i", "if", "in", "into", "is", "it", "its", "just", "made",
+        "make", "me", "more", "most", "my", "need", "new", "no", "not", "now", "of", "on",
+        "only", "or", "other", "our", "out", "over", "same", "should", "some", "such", "than",
+        "that", "the", "them", "then", "these", "they", "this", "those", "to", "top",
+        "tutorial", "use", "used", "using", "very", "via", "want", "was", "we", "were", "what",
+        "when", "where", "which", "who", "why", "will", "with", "without", "would", "you",
+        "your",
+    ]
+)
+
+
+def load_subreddits(path: Path | None = None) -> list[str]:
+    data = yaml.safe_load((path or DEFAULT_SEEDS).read_text(encoding="utf-8")) or {}
+    return list(data.get("subreddits") or [])
+
+
+# A harvested phrase must name something sellable. Without this gate the first
+# live harvest returned "feel like", "wrong path" and "path can keep" -- Reddit
+# titles are conversation, and n-grams of conversation are conversation. This
+# is the seeded-not-swept principle (decision 9) applied to harvest: the gate
+# is what keeps discovery anchored to things a two-person team could sell.
+PRODUCT_NOUNS = frozenset(
+    [
+        "agency", "api", "app", "audit", "automation", "blog", "bot", "brand",
+        "bundle", "calculator", "checklist", "client", "clients", "course",
+        "dashboard", "design", "directory", "ebook", "editing", "editor",
+        "extension", "funnel", "generator", "gig", "guide", "kit", "landing",
+        "lead", "leads", "magnet", "marketplace", "newsletter", "niche",
+        "plugin", "podcast", "preset", "pricing", "product", "saas", "script",
+        "seo", "service", "shop", "software", "store", "subscription",
+        "template", "templates", "theme", "tool", "toolkit", "video",
+        "website", "widget", "workflow",
+    ]
+)
+
+MONTHS = frozenset(
+    [
+        "january", "february", "march", "april", "may", "june", "july",
+        "august", "september", "october", "november", "december",
+    ]
+)
+
+
+def _is_junk(window: list[str]) -> bool:
+    """Reject phrases that are dates, counts or pure filler.
+
+    The first live harvest returned exactly one candidate and it was
+    "september 2026" -- subreddit titles are full of dates, weekday threads and
+    dollar amounts that look like phrases and mean nothing. Relevance was
+    already the bottleneck that killed 250 of Retrend's 395 candidates.
+    """
+    if window[0] in STOP_WORDS or window[-1] in STOP_WORDS:
+        return True
+    if all(w in STOP_WORDS for w in window):
+        return True
+    if any(w in MONTHS for w in window):
+        return True
+    if any(re.fullmatch(r"[0-9][0-9a-z']*", w) for w in window):
+        # Any bare number: years, "10k", "2026", "$5000".
+        return True
+    # Must name something sellable, or it is just conversation.
+    return not any(w in PRODUCT_NOUNS for w in window)
+
+
+def _ngrams(title: str, sizes: tuple[int, ...] = (2, 3)) -> list[str]:
+    words = [w for w in re.findall(r"[a-z0-9']+", title.lower()) if len(w) > 2]
+    grams: list[str] = []
+    for size in sizes:
+        for i in range(len(words) - size + 1):
+            window = words[i : i + size]
+            if _is_junk(window):
+                continue
+            grams.append(" ".join(window))
+    return grams
+
+
+def harvest_reddit(
+    conn: sqlite3.Connection,
+    *,
+    subreddits: list[str] | None = None,
+    seeds_path: Path | None = None,
+    opener=None,
+    max_new_terms: int = 50,
+    min_mentions: int = 2,
+) -> list[str]:
+    """Mine candidate terms from subreddit titles. Returns what was added.
+
+    A phrase has to appear at least `min_mentions` times before it becomes a
+    term: one person mentioning something once is not a signal, and every term
+    added costs 100 YouTube quota units on every sweep afterwards.
+    """
+    import urllib.request
+    from collections import Counter
+
+    from .collectors.base import RateLimiter
+    from .collectors.http import USER_AGENT
+
+    logger = log.get(__name__)
+    opener = opener or urllib.request.urlopen
+    subs = subreddits if subreddits is not None else load_subreddits(seeds_path)
+    _, patterns = load_seeds(seeds_path)
+
+    counts: Counter[str] = Counter()
+    failed = 0
+    # Reddit rate limits the feeds too; one 429 costs a whole subreddit.
+    limiter = RateLimiter(min_interval_s=2.0, max_retries=3, base_backoff_s=4.0)
+    for sub in subs:
+        url = REDDIT_RSS.format(sub=sub)
+        def fetch(url=url):
+            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with opener(request, timeout=25) as response:
+                return response.read().decode("utf-8", "replace")
+
+        try:
+            body = limiter.call(fetch, describe=f"reddit rss {sub}")
+        except Exception as exc:  # noqa: BLE001 -- one sub, not the harvest
+            failed += 1
+            logger.warning("subreddit feed failed", extra={"sub": sub, "error": str(exc)})
+            continue
+        # The first <title> is the feed's own name, not a post.
+        for title in TITLE_RE.findall(body)[1:]:
+            counts.update(set(_ngrams(title)))
+
+    existing = {
+        r["normalized"] for r in conn.execute("SELECT normalized FROM terms")
+    }
+    ts = now()
+    added: list[str] = []
+    for phrase, seen in counts.most_common():
+        if len(added) >= max_new_terms:
+            break
+        if seen < min_mentions or phrase in existing or is_excluded(phrase, patterns):
+            continue
+        conn.execute(
+            "INSERT INTO terms "
+            "(term, normalized, category, origin, first_seen_ts, last_seen_ts) "
+            "VALUES (?, ?, NULL, 'harvest:reddit', ?, ?) ON CONFLICT(term) DO NOTHING",
+            (phrase, normalize(phrase), ts, ts),
+        )
+        added.append(phrase)
+
+    logger.info(
+        "harvested",
+        extra={"subreddits": len(subs), "failed": failed, "candidates": len(counts),
+               "added": len(added)},
+    )
+    return added

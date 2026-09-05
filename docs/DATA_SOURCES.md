@@ -117,19 +117,34 @@ the loose number would be counting noise and calling it demand.
 ## Supply side (saturation)
 
 Result counts, not content. Cheap, and the honest half of the system.
+Store **raw counts with timestamps**; the LOW/MED/HIGH label is computed at
+score time so thresholds stay tunable without re-collecting.
 
-| Source | Method | Signal |
+Measured 2026-09-05. Most of the original table turned out to be unreachable:
+
+| Source | Method | Status |
 |---|---|---|
-| Etsy | search result count | POD / digital / craft supply |
-| Amazon | result count | physical supply (mostly a red flag for us) |
-| Fiverr | gig count for the term | service supply |
-| Gumroad | search count | digital product supply |
-| Shopify app store | result count | app supply |
-| GitHub | repo search count | OSS supply, is it commoditized |
-| Product Hunt | launches matching | how many already tried |
+| GitHub | search API `total_count` | **works**, no key |
+| Gumroad | `/discover` embeds `search_results.total` | **works**, no key |
+| Shopify app store | result count | **no** — results render client-side, no count in the HTML |
+| Etsy | search result count | **no** — HTTP 403 to any non-browser request |
+| Fiverr | gig count | **no** — HTTP 403 to any non-browser request |
+| Product Hunt | launches matching | **no scraping** — `Disallow: /search*` under `User-agent: *`. Use the API; needs a token |
+| Amazon | result count | not attempted; physical supply, low value here |
 
-Store **raw counts with timestamps**. The derived LOW/MED/HIGH label is computed
-at score time so thresholds stay tunable without re-collecting.
+Etsy and Fiverr would both answer a browser User-Agent. That is precisely the
+line PROMPT.md draws — identify honestly, respect the block — so they stay
+unavailable rather than faked.
+
+Two sources is thin for a saturation signal, and it skews developer-ward:
+GitHub counts repositories, not sellers. `chrome extension` reads 155,339 on
+GitHub and 604 on Gumroad, and those are answers to different questions. Until
+Product Hunt's token lands, read saturation as "is this commoditised in OSS and
+on Gumroad", not "how many people sell this".
+
+Note: Python's `urllib.robotparser` returned `can_fetch = True` for the Product
+Hunt search path despite the explicit `Disallow: /search*`. It mishandles the
+`*` wildcard. Read robots.txt yourself rather than trusting it.
 
 ## Excluded
 

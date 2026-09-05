@@ -62,6 +62,7 @@ sources:                      # disable anything that breaks; run degrades
   github:        {enabled: true}
   tikwm:         {enabled: false, note: "feed/search returns 403 since 2026-09-05; see DATA_SOURCES"}
   hackernews:    {enabled: true}
+  gumroad:       {enabled: true,  note: "saturation only; /discover embeds the total"}
 
 llm:
   provider: ollama

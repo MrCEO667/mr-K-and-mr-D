@@ -106,5 +106,23 @@ python -m radar.report --term "faceless youtube"
 
 First live sweep: 1932 snapshots across 21 terms, 92 days of history each.
 
-M2 (the rest of the collectors) is next and needs the YouTube, Reddit and
-Product Hunt keys.
+M2 and M4 are in as far as the credentials allow:
+
+| Source | Signal | Status |
+|---|---|---|
+| Google Trends | `interest` | live, anchored |
+| YouTube | `view_sum`, `video_count` | live |
+| Hacker News | `post_count` | live |
+| GitHub | `stars` + repo count | live |
+| Gumroad | supply count | live |
+| Reddit | `post_count`, `score_sum` | written, needs a script app |
+| Product Hunt | `launch_count`, `vote_sum` | written, needs a developer token |
+| tikwm | — | dead, see decision 19 |
+
+```bash
+python -m radar --once              # collect + count supply
+python -m radar --once --harvest    # also mine new terms from subreddit RSS
+python -m radar.report --term "faceless youtube"
+```
+
+M5 (durability model) is next.

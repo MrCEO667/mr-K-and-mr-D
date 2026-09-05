@@ -15,18 +15,20 @@ import sys
 from collections.abc import Sequence
 
 from . import config as config_module
-from . import db, discover, log
+from . import db, discover, log, saturation
 from .cache import Cache
 from .collectors.base import RateLimiter, SourceHealth, SourceUnavailable
 from .collectors.github import GitHubCollector
 from .collectors.hackernews import HackerNewsCollector
 from .collectors.http import JsonHttp
+from .collectors.producthunt import ProductHuntCollector
+from .collectors.reddit import RedditCollector
 from .collectors.trends import TrendsCollector
 from .collectors.youtube import YouTubeCollector
 
 # Stages still to land keep their place in the list so the shape of a run is
 # visible from the logs before the code exists.
-PENDING_STAGES = ("saturation", "score", "compose", "deliver")
+PENDING_STAGES = ("score", "compose", "deliver")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="sweep",
         choices=db.VALID_KINDS,
         help="which run this is; recorded on the runs row (default: sweep)",
+    )
+    parser.add_argument(
+        "--harvest",
+        action="store_true",
+        help="mine new terms from subreddit RSS before collecting (opt-in: "
+        "harvest quality is unproven and each new term costs quota every sweep)",
     )
     parser.add_argument("--config", default=None, help="path to config.yaml")
     parser.add_argument("--log-level", default="INFO")
@@ -121,6 +129,12 @@ def build_collectors(cfg: config_module.Config, *, cache: Cache | None = None) -
                 )
             )
         )
+
+    if "reddit" in enabled:
+        collectors.append(RedditCollector())
+
+    if "product_hunt" in enabled:
+        collectors.append(ProductHuntCollector())
 
     if "github" in enabled:
         from .collectors.github import MIN_INTERVAL_S
@@ -199,10 +213,17 @@ def execute(
     kind: str,
     *,
     dry_run: bool,
+    harvest: bool = False,
 ) -> str:
     """Open a run and walk the stages that exist."""
     with db.run(conn, kind, dry_run=dry_run) as run_id:
         logger = log.get(__name__, run_id=run_id)
+
+        if harvest:
+            added = discover.harvest_reddit(
+                conn, max_new_terms=int(cfg.get("discovery.max_new_terms_per_run", 50))
+            )
+            logger.info("harvested terms", extra={"added": len(added)})
 
         terms = discover.seed_terms(conn)
         if kind == "watchlist":
@@ -211,6 +232,10 @@ def execute(
 
         written = run_collectors(conn, build_collectors(cfg), terms, run_id)
         logger.info("snapshots written", extra={"new_rows": written})
+
+        counters = saturation.build_counters(set(cfg.enabled_sources()))
+        supply = saturation.collect_saturation(conn, counters, terms, run_id)
+        logger.info("supply counted", extra={"rows": supply})
 
         for stage in PENDING_STAGES:
             logger.info("stage skipped, not implemented yet", extra={"stage": stage})
@@ -237,7 +262,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not preflight(cfg, logger) and not args.dry_run:
             logger.error("refusing to run: a source is enabled but cannot authenticate")
             return 1
-        run_id = execute(conn, cfg, args.kind, dry_run=args.dry_run)
+        run_id = execute(
+            conn, cfg, args.kind, dry_run=args.dry_run, harvest=args.harvest
+        )
     finally:
         conn.close()
 
