@@ -11,9 +11,9 @@ the values you paste into .env and config/config.yaml.
        privacy mode means the bot only receives slash-prefixed messages
     5. python scripts/telegram_setup.py
 """
+import json
 import os
 import sys
-import json
 import urllib.request
 
 # Windows consoles default to a legacy codepage; operator names are frequently
@@ -28,7 +28,7 @@ def call(token, method):
     with urllib.request.urlopen(API.format(token=token, method=method), timeout=20) as r:
         payload = json.load(r)
     if not payload.get("ok"):
-        sys.exit("Telegram API error: {}".format(payload))
+        sys.exit(f"Telegram API error: {payload}")
     return payload["result"]
 
 
@@ -37,10 +37,11 @@ def load_token():
     if token:
         return token
     try:
-        for line in open(".env", encoding="utf-8"):
-            key, _, value = line.partition("=")
-            if key.strip() == "TELEGRAM_BOT_TOKEN" and value.strip():
-                return value.strip()
+        with open(".env", encoding="utf-8") as fh:
+            for line in fh:
+                key, _, value = line.partition("=")
+                if key.strip() == "TELEGRAM_BOT_TOKEN" and value.strip():
+                    return value.strip()
     except FileNotFoundError:
         pass
     sys.exit("No TELEGRAM_BOT_TOKEN. Copy .env.example to .env and fill it in.")
@@ -74,15 +75,15 @@ def main():
     print("Chats seen (use the negative group ID, not a personal one):")
     for cid, title in chats.items():
         kind = "GROUP" if cid < 0 else "private"
-        print("  {:<18} {:<8} {}".format(cid, kind, title))
+        print(f"  {cid:<18} {kind:<8} {title}")
 
     print("\nOperators seen -- paste into config/config.yaml under telegram.operators:")
     print("  operators:")
     for uid, name in users.items():
-        print('    - {{id: {}, name: "{}"}}'.format(uid, name))
+        print(f'    - {{id: {uid}, name: "{name}"}}')
 
     if len(users) < 2:
-        print("\nOnly {} operator seen. The other one still needs to send a".format(len(users)))
+        print(f"\nOnly {len(users)} operator seen. The other one still needs to send a")
         print("slash-message in the group before their ID appears here.")
 
 
