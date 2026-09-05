@@ -1,0 +1,19 @@
+# Tooling config only. NicheRadar is run as `python -m radar`, not installed,
+# so there is no build section here on purpose.
+
+[tool.pytest.ini_options]
+# CI runs bare `pytest`, which does not put the repo root on sys.path the way
+# `python -m pytest` does. Without this, every test importing radar fails in
+# CI and passes locally.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = ["data", "models", "cache"]
+
+[tool.ruff.lint]
+# Pinned explicitly so a ruff upgrade cannot turn main red on its own.
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]

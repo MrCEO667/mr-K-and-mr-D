@@ -51,7 +51,11 @@ def test_bad_config_exits_two_and_does_not_crash(tmp_path):
 def test_enabled_source_without_credentials_stops_the_run(tmp_path, monkeypatch):
     monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
     path = tmp_path / "config.yaml"
-    data = {**CONFIG, "db": {"path": str(tmp_path / "radar.db")}, "sources": {"youtube": {"enabled": True}}}
+    data = {
+        **CONFIG,
+        "db": {"path": str(tmp_path / "radar.db")},
+        "sources": {"youtube": {"enabled": True}},
+    }
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
     # Silent zero-row collection is the predecessor's signature failure.
     assert runner.main(["--once", "--config", str(path)]) == 1

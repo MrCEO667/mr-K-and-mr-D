@@ -61,7 +61,10 @@ def preflight(cfg: config_module.Config, logger) -> bool:
     healthy = True
     missing = cfg.missing_secrets()
     for source, keys in missing.items():
-        logger.error("enabled source has no credentials", extra={"source": source, "missing": keys})
+        logger.error(
+            "enabled source has no credentials",
+            extra={"source": source, "missing": keys},
+        )
         healthy = False
     logger.info(
         "preflight",
@@ -74,7 +77,13 @@ def preflight(cfg: config_module.Config, logger) -> bool:
     return healthy
 
 
-def execute(conn: sqlite3.Connection, cfg: config_module.Config, kind: str, *, dry_run: bool) -> str:
+def execute(
+    conn: sqlite3.Connection,
+    cfg: config_module.Config,
+    kind: str,
+    *,
+    dry_run: bool,
+) -> str:
     """Open a run and walk the stages. Stages are no-ops until their milestone
     lands -- they are listed so the wiring is visible from day one."""
     with db.run(conn, kind, dry_run=dry_run) as run_id:
