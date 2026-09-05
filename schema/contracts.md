@@ -20,6 +20,25 @@ class Collector(ABC):
     def health(self) -> SourceHealth: ...
 ```
 
+`Term` and `SourceHealth` are the two types that ABC signature refers to:
+
+```python
+@dataclass(frozen=True)
+class Term:
+    id: int
+    term: str            # as queried
+    normalized: str
+    starred: bool        # on the hourly watchlist
+
+@dataclass
+class SourceHealth:
+    source: str
+    status: str          # ok | degraded | down
+    latency_ms: int | None
+    error_count: int
+    message: str | None
+```
+
 ```python
 @dataclass
 class Reading:
