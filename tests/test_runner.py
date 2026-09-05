@@ -9,7 +9,9 @@ from radar import runner
 CONFIG = {
     "db": {"path": "data/radar.db"},
     "telegram": {"operators": [{"id": 111, "name": "Mr K"}, {"id": 222, "name": "Mr D"}]},
-    "sources": {"github": {"enabled": True}, "hackernews": {"enabled": True}},
+    # No implemented source is enabled: this suite exercises the entry point,
+    # not the collectors, and must never reach the network.
+    "sources": {"tikwm": {"enabled": True}},
 }
 
 
