@@ -27,7 +27,9 @@ ENV_PREFIX = "RADAR__"
 SOURCE_SECRETS: dict[str, tuple[str, ...]] = {
     "youtube": ("YOUTUBE_API_KEY",),
     "reddit": ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"),
-    "product_hunt": ("PRODUCTHUNT_TOKEN",),
+    # Either the app pair or a pre-issued token satisfies this; the
+    # collector checks the alternative itself.
+    "product_hunt": ("PRODUCTHUNT_CLIENT_ID", "PRODUCTHUNT_CLIENT_SECRET"),
     "google_trends": (),
     "github": (),
     "tikwm": (),

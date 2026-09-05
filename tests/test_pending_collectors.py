@@ -1,9 +1,10 @@
 """Product Hunt and Reddit collectors.
 
-Both are written against documented APIs and have never run against the live
-services -- the token and the script app do not exist yet. These tests pin the
-shape and the failure behaviour; they do not prove the field names are right.
-That only happens on first contact with the real API.
+Product Hunt is verified against the live API. Reddit is not -- the script app
+does not exist yet, so its tests pin shape and failure behaviour without
+proving the field names. Product Hunt is the cautionary tale: its first version
+queried posts(query: ...), passed its stubs, and turned out to be a field the
+schema does not have.
 """
 import io
 import json
@@ -11,7 +12,8 @@ import urllib.error
 
 import pytest
 
-from radar.collectors.base import SourceUnavailable, Term
+from radar.cache import Cache
+from radar.collectors.base import RateLimiter, SourceUnavailable, Term
 from radar.collectors.producthunt import ProductHuntCollector
 from radar.collectors.reddit import RedditCollector
 
@@ -43,49 +45,157 @@ def sequence(*payloads):
     return opener
 
 
-# --- Product Hunt ----------------------------------------------------------
+# --- Product Hunt ---------------------------------------------------------
+# Verified against the live API on 2026-09-05. The first version of this
+# collector queried posts(query: ...), a field that does not exist.
 
-def ph_payload(total, *posts):
+def ph_page(has_next, cursor, *posts):
     return {
         "data": {
             "posts": {
-                "totalCount": total,
+                "pageInfo": {"hasNextPage": has_next, "endCursor": cursor},
                 "edges": [{"node": p} for p in posts],
             }
         }
     }
 
 
-def test_ph_requires_a_token(monkeypatch):
+def token_page():
+    return {"access_token": "tok", "token_type": "Bearer"}
+
+
+def ph_collector(tmp_path, *payloads, **kw):
+    return ProductHuntCollector(
+        client_id="a",
+        client_secret="b",
+        opener=sequence(*payloads),
+        rate_limiter=RateLimiter(min_interval_s=0, sleep=lambda s: None),
+        cache=Cache(tmp_path / "cache"),
+        **kw,
+    )
+
+
+def test_ph_requires_credentials(monkeypatch):
+    monkeypatch.delenv("PRODUCTHUNT_CLIENT_ID", raising=False)
+    monkeypatch.delenv("PRODUCTHUNT_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("PRODUCTHUNT_TOKEN", raising=False)
-    with pytest.raises(SourceUnavailable, match="PRODUCTHUNT_TOKEN"):
+    with pytest.raises(SourceUnavailable, match="PRODUCTHUNT_CLIENT_ID"):
         ProductHuntCollector()
 
 
-def test_ph_stores_launch_count_and_votes():
-    post = {"id": "1", "name": "Voicey", "url": "https://ph.test/1", "votesCount": 120}
-    c = ProductHuntCollector(token="t", opener=sequence(ph_payload(7, post)))
+def test_ph_matches_terms_against_one_scan(tmp_path):
+    posts = [
+        {"id": "1", "name": "Voicey", "tagline": "an ai voice clone tool",
+         "url": "https://ph.test/1", "votesCount": 120},
+        {"id": "2", "name": "Notionly", "tagline": "a notion template shop",
+         "url": "https://ph.test/2", "votesCount": 8},
+    ]
+    c = ph_collector(tmp_path, token_page(), ph_page(False, None, *posts))
     result = c.collect(TERMS, "r1")
     by = {r.metric: r.value for r in result.readings}
-    assert by["launch_count"] == 7.0
+    assert by["launch_count"] == 1.0
     assert by["vote_sum"] == 120.0
     assert result.evidence[0].url == "https://ph.test/1"
 
 
-def test_ph_graphql_errors_are_not_read_as_zero():
-    # GraphQL answers 200 with an errors array. Treating that as no data would
-    # store a zero meaning "nobody launched this" -- the worst wrong answer.
-    c = ProductHuntCollector(
-        token="t", opener=sequence({"errors": [{"message": "bad field"}]})
+def test_ph_matches_on_word_boundaries_not_substrings(tmp_path):
+    # Plain `in` made the term "ai" match 39 of 160 live launches by finding
+    # it inside "email", "training" and "explain".
+    posts = [
+        {"id": "1", "name": "Mailer", "tagline": "email training explained",
+         "url": "https://ph.test/1", "votesCount": 5},
+    ]
+    c = ph_collector(tmp_path, token_page(), ph_page(False, None, *posts))
+    result = c.collect([Term(id=9, term="ai", normalized="ai")], "r1")
+    assert {r.metric: r.value for r in result.readings}["launch_count"] == 0.0
+
+
+def test_ph_walks_pages_until_the_feed_ends(tmp_path):
+    c = ph_collector(
+        tmp_path,
+        token_page(),
+        ph_page(True, "cur1", {"id": "1", "name": "a", "tagline": "", "url": "u", "votesCount": 1}),
+        ph_page(False, None, {"id": "2", "name": "b", "tagline": "", "url": "u", "votesCount": 1}),
     )
+    assert len(c.recent_launches()) == 2
+    assert c.complexity_used == 400
+
+
+def test_ph_stops_at_max_pages(tmp_path):
+    # The budget is 6250 complexity per 15 minutes at 200 a page; walking the
+    # whole feed would spend it and strand the next run.
+    pages = [ph_page(True, f"c{i}", {"id": str(i), "name": "x", "tagline": "",
+                                     "url": "u", "votesCount": 1}) for i in range(5)]
+    c = ph_collector(tmp_path, token_page(), *pages, max_pages=3)
+    assert len(c.recent_launches()) == 3
+    assert c.complexity_used == 600
+
+
+def test_ph_the_scan_is_cached_for_the_day(tmp_path):
+    c = ph_collector(
+        tmp_path,
+        token_page(),
+        ph_page(False, None, {"id": "1", "name": "a", "tagline": "", "url": "u", "votesCount": 1}),
+    )
+    c.recent_launches()
+    # A second walk would exhaust the opener sequence and raise IndexError.
+    assert len(c.recent_launches()) == 1
+
+
+def test_ph_graphql_errors_are_not_read_as_zero(tmp_path):
+    # GraphQL answers 200 with an errors array. Treating that as no data would
+    # store zeros meaning "nobody launched this" -- the worst wrong answer.
+    c = ph_collector(tmp_path, token_page(), {"errors": [{"message": "bad field"}]})
     with pytest.raises(SourceUnavailable):
         c.collect(TERMS, "r1")
 
 
-def test_ph_a_rejected_token_is_a_dead_source():
+def test_ph_a_rejected_credential_is_a_dead_source(tmp_path):
     err = urllib.error.HTTPError("u", 401, "unauthorized", {}, None)
-    c = ProductHuntCollector(token="bad", opener=sequence(err))
-    with pytest.raises(SourceUnavailable, match="rejected the token"):
+    c = ph_collector(tmp_path, err)
+    with pytest.raises(SourceUnavailable, match="rejected the credentials"):
+        c.collect(TERMS, "r1")
+
+
+def test_ph_a_rate_limited_scan_keeps_the_pages_it_got(tmp_path):
+    # The first full sweep 429'd part way through. Pages already walked are
+    # real launches; reporting nothing would be worse than reporting fewer.
+    err = urllib.error.HTTPError("u", 429, "too many", {}, None)
+    c = ph_collector(
+        tmp_path,
+        token_page(),
+        ph_page(True, "c1", {"id": "1", "name": "Voicey",
+                             "tagline": "an ai voice clone tool",
+                             "url": "https://ph.test/1", "votesCount": 3}),
+        err, err, err, err,
+    )
+    result = c.collect(TERMS, "r1")
+    assert result.partial
+    assert any("truncated" in e for e in result.errors)
+    assert {r.metric: r.value for r in result.readings}["launch_count"] == 1.0
+    assert c.health().status == "degraded"
+
+
+def test_ph_a_truncated_scan_is_not_cached(tmp_path):
+    err = urllib.error.HTTPError("u", 429, "too many", {}, None)
+    c = ph_collector(
+        tmp_path,
+        token_page(),
+        ph_page(True, "c1", {"id": "1", "name": "a", "tagline": "",
+                             "url": "u", "votesCount": 1}),
+        err, err, err, err,
+    )
+    assert len(c.recent_launches()) == 1
+    # Caching a short answer would freeze it in for the rest of the day, so a
+    # second call must walk again rather than serve the cache. Here that means
+    # exhausting the stubbed opener and coming back with nothing.
+    assert c.recent_launches() == []
+
+
+def test_ph_a_scan_that_returns_nothing_is_a_dead_source(tmp_path):
+    err = urllib.error.HTTPError("u", 429, "too many", {}, None)
+    c = ph_collector(tmp_path, token_page(), err, err, err, err)
+    with pytest.raises(SourceUnavailable, match="no launches scanned"):
         c.collect(TERMS, "r1")
 
 
