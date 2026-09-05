@@ -64,3 +64,23 @@ def test_enabled_source_without_its_key_is_reported(tmp_path, monkeypatch):
     data = {**BASE, "sources": {"youtube": {"enabled": True}}}
     cfg = config_module.load(write(tmp_path, data), environ={})
     assert cfg.missing_secrets() == {"youtube": ["YOUTUBE_API_KEY"]}
+
+
+def test_env_override_survives_windows_uppercasing(tmp_path):
+    # os.environ on Windows uppercases every key, so the override arrived as
+    # RADAR__SOURCES__GITHUB__ENABLED and silently created a second section
+    # while the real setting stayed true.
+    data = {**BASE, "sources": {"github": {"enabled": True}}}
+    cfg = config_module.load(
+        write(tmp_path, data), environ={"RADAR__SOURCES__GITHUB__ENABLED": "false"}
+    )
+    assert cfg.get("sources.github.enabled") is False
+    assert cfg.enabled_sources() == []
+
+
+def test_env_override_still_works_in_the_original_case(tmp_path):
+    data = {**BASE, "sources": {"github": {"enabled": True}}}
+    cfg = config_module.load(
+        write(tmp_path, data), environ={"RADAR__sources__github__enabled": "false"}
+    )
+    assert cfg.get("sources.github.enabled") is False

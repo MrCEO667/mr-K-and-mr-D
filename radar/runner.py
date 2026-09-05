@@ -16,7 +16,11 @@ from collections.abc import Sequence
 
 from . import config as config_module
 from . import db, discover, log
+from .cache import Cache
 from .collectors.base import RateLimiter, SourceHealth, SourceUnavailable
+from .collectors.github import GitHubCollector
+from .collectors.hackernews import HackerNewsCollector
+from .collectors.http import JsonHttp
 from .collectors.trends import TrendsCollector
 
 # Stages still to land keep their place in the list so the shape of a run is
@@ -81,13 +85,44 @@ def preflight(cfg: config_module.Config, logger) -> bool:
     return healthy
 
 
-def build_collectors(cfg: config_module.Config) -> list:
-    """Only enabled sources, and only ones that are built."""
+def build_collectors(cfg: config_module.Config, *, cache: Cache | None = None) -> list:
+    """Only enabled sources, and only ones that are built.
+
+    A source enabled in config but not yet implemented is silently absent
+    rather than a crash -- config.example.yaml enables everything by design.
+    """
     enabled = set(cfg.enabled_sources())
-    collectors = []
+    shared_cache = cache if cache is not None else Cache()
+    collectors: list = []
+
     if "google_trends" in enabled:
         rate = cfg.get("sources.google_trends.rate_limit_s", 4)
         collectors.append(TrendsCollector(rate_limiter=RateLimiter(min_interval_s=float(rate))))
+
+    if "hackernews" in enabled:
+        collectors.append(
+            HackerNewsCollector(
+                http=JsonHttp(
+                    HackerNewsCollector.source,
+                    rate_limiter=RateLimiter(min_interval_s=1.0),
+                    cache=shared_cache,
+                )
+            )
+        )
+
+    if "github" in enabled:
+        from .collectors.github import MIN_INTERVAL_S
+
+        collectors.append(
+            GitHubCollector(
+                http=JsonHttp(
+                    GitHubCollector.source,
+                    rate_limiter=RateLimiter(min_interval_s=MIN_INTERVAL_S),
+                    cache=shared_cache,
+                )
+            )
+        )
+
     return collectors
 
 

@@ -15,8 +15,8 @@ call**. That is what makes the durability model trainable on day one instead of
 after six months of collection. Every other source gives you only "now".
 
 - Rate limited aggressively. Exponential backoff, 1 req / 3–5 s, cache hard.
-  4 s was not enough in practice; 8 s got a full sweep through with one batch
-  lost to throttling.
+  At the documented 4 s, two live sweeps each lost exactly one batch of four
+  terms to throttling and completed the rest. Wider spacing is untested.
 - Values are *relative* (0–100, normalized within the request) — never compare
   across separate requests without a shared anchor term. Use a fixed anchor.
 - 429s are routine. Treat as backoff, not as failure.
@@ -53,36 +53,51 @@ req/min with credentials, effectively nothing without them.
 
 Subreddits are seeds, not a fixed list — put them in `config/seeds.yaml`.
 
-### tikwm.com — unofficial TikTok mirror
-Proven working in Retrend across three endpoints: `/api/feed/list` (trending,
-region-hinted), `/api/feed/search` (keyword, cursor paging), `/api/user/posts`.
-No auth, no key.
+### tikwm.com — unofficial TikTok mirror — **SEARCH IS DEAD**
 
-**Reuse the Retrend client code.** It handles cursor paging and region hints
-already.
+`/api/feed/search`, the keyword endpoint this project was going to depend on,
+returns **HTTP 403** as of 2026-09-05. Verified across GET and POST, on both
+`tikwm.com` and `www.tikwm.com`, with our honest User-Agent. Only
+`/api/feed/list` still answers, and only with a `region` parameter.
 
-Two known truths from that project:
-1. It is a **single point of failure** with no fallback. It must degrade the
-   score, never break the run.
-2. **Generic trending feeds are the wrong source for a niche.** Retrend's
-   worldwide feed was full of genuinely viral content that was worthless for its
-   audience — the relevance screen killed 250 of 395 candidates while the math
-   filter killed only 78. Keyword search with seeded terms is what worked. Use
-   `/api/feed/search` as the primary path and `/api/feed/list` only for harvest.
+That leaves no usable TikTok demand signal:
+
+- `/api/feed/search` — 403. This was the primary path.
+- `/api/feed/list` — works, but it is the generic worldwide trending feed, and
+  this project already knows that is the wrong source. Retrend's relevance
+  screen killed 250 of 395 candidates fed from exactly this kind of feed while
+  the math filter killed only 78.
+
+So tikwm is **disabled**, not degraded: a collector built on the trending feed
+would produce rows that look like data and mean nothing. Re-enable only if the
+search endpoint comes back. The prior note to reuse Retrend's client stands if
+it does.
 
 TikTok's official Research API needs academic affiliation. Creative Center went
-404. Instagram's Graph API only reads accounts you own. Neither is available.
+404. Instagram's Graph API only reads accounts you own. Neither is available,
+which now leaves **YouTube as the only video demand source** — one more reason
+the YouTube key matters.
 
 ### Product Hunt — GraphQL, free tier
 Developer token, generous limits. Good for both demand (what launched, how it
 did) and supply (is someone already doing this).
 
-### GitHub Trending — scrape
-No official API for trending. Scrape the HTML, or use one of the community
-mirrors. Best leading indicator for developer-tool niches.
+### GitHub — repo search API, no key
+`/search/repositories` works unauthenticated at 10 req/min, which is enough and
+avoids scraping entirely. The demand metric is `stars`: the summed stars of the
+ten best-matching repos. The repo *count* is a supply signal and belongs to
+saturation, not here.
+
+Trending-page scraping is still the better harvest source for discovery (M3);
+the search API covers per-term demand.
 
 ### Hacker News — Algolia API, free, no key
 Unlimited practical use. Good for harvest and for "Show HN" launch signals.
+
+**Quote the phrase.** Algolia ORs the words otherwise: unquoted
+`ai voice clone` returns 219 stories matching almost anything with "ai" in it,
+where the quoted phrase returns 22 that are actually about the thing. Counting
+the loose number would be counting noise and calling it demand.
 
 ## Supply side (saturation)
 

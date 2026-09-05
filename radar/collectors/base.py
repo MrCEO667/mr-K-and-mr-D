@@ -116,6 +116,10 @@ class RateLimiter:
             self.wait()
             try:
                 return fn()
+            except SourceUnavailable:
+                # A 403 or a dead host is a verdict, not a hiccup. Retrying it
+                # only burns the backoff budget the next source will need.
+                raise
             except Exception as exc:  # noqa: BLE001 -- the client raises anything
                 last_error = exc
                 delay = self.backoff_delay(attempt)

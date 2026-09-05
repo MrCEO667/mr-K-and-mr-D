@@ -23,6 +23,7 @@ commit as the code.
 | 14 | Public repo. | Unlimited Actions minutes for CI. No secrets in the repo — `.env` is gitignored. |
 | 15 | English docs, Python + SQLite. | Confirmed. |
 | 16 | One shared Telegram **supergroup** for both operators, not two private chats. | Cards deliver once and both see the same evidence; discussion sits next to the card. Two DMs would double alert volume and split the label set across chats with no join key. |
+| 19 | tikwm is disabled, not degraded. No TikTok demand signal in v1. | Its `/api/feed/search` endpoint returns 403 as of 2026-09-05 (GET and POST, both hosts, honest UA). Only the generic worldwide trending feed answers, and decision 9 already established that generic feeds are the wrong input for a niche. A collector on that feed would produce rows that look like data and mean nothing. |
 | 18 | Google Trends readings are rescaled against a fixed anchor term, `wordpress plugin`, and a flat-zero series is refused rather than stored. | Trends values are relative within one request, so raw numbers from different requests share no scale. The anchor must be volume-comparable: against `weather`, every seed term read 0 for a full quarter, which stores as silence and is indistinguishable from no demand. Changing the anchor makes new readings incomparable with old ones. |
 | 17 | Decisions and outcomes record `actor_tg_id`. Operators are allowlisted in `config.yaml`. | Two humans label one training set. Without an actor column M9 learns the average of two different tastes and can never be told they disagree. The allowlist exists because anyone added to a group can otherwise command the bot. |
 
@@ -45,8 +46,12 @@ Recorded so nobody re-proposes them.
 
 - **GitHub Actions as the scheduler** — proposed, then rejected. The composer
   requires a local GPU and model. See decision 4.
-- **TikTok/Instagram called unavailable** — corrected. The predecessor proved
-  tikwm.com works without auth across three endpoints. See decision 6.
+- **TikTok/Instagram called unavailable** — corrected during planning on the
+  strength of Retrend's experience, then **corrected back on contact with
+  reality**: tikwm's search endpoint 403s as of 2026-09-05. Decision 6 held
+  when it was written; decision 19 supersedes it. `/api/feed/list` still
+  responds but is the wrong source. This is what decisions 6 and 19 look like
+  when a source dies between planning and building.
 - **"Model reads business news to find fast-growing companies"** — the original
   framing. Replaced by decisions 1 and 2, because it has no labels and no
   failure data.

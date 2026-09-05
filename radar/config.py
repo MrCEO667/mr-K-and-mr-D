@@ -117,17 +117,35 @@ def _coerce(value: str, like: Any) -> Any:
     return value
 
 
+def _resolve_key(node: dict[str, Any], part: str) -> str:
+    """Match a config key case-insensitively.
+
+    Windows uppercases every name in os.environ, so RADAR__sources__github
+    arrives as RADAR__SOURCES__GITHUB. Matching case-sensitively created a
+    second, uppercase section and left the real setting untouched -- an
+    override that reported success and changed nothing.
+    """
+    if part in node:
+        return part
+    lowered = part.lower()
+    for existing in node:
+        if existing.lower() == lowered:
+            return existing
+    return part
+
+
 def _apply_env_overrides(data: dict[str, Any], environ: dict[str, str]) -> None:
     for key, value in environ.items():
-        if not key.startswith(ENV_PREFIX):
+        if not key.upper().startswith(ENV_PREFIX.upper()):
             continue
         parts = key[len(ENV_PREFIX) :].split("__")
         node: Any = data
         for part in parts[:-1]:
-            if not isinstance(node.get(part), dict):
-                node[part] = {}
-            node = node[part]
-        leaf = parts[-1]
+            resolved = _resolve_key(node, part)
+            if not isinstance(node.get(resolved), dict):
+                node[resolved] = {}
+            node = node[resolved]
+        leaf = _resolve_key(node, parts[-1])
         node[leaf] = _coerce(value, node.get(leaf))
 
 

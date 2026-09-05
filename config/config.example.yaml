@@ -60,7 +60,7 @@ sources:                      # disable anything that breaks; run degrades
   reddit:        {enabled: true,  rate_limit_s: 1}
   product_hunt:  {enabled: true}
   github:        {enabled: true}
-  tikwm:         {enabled: true,  note: "unofficial mirror, degrade never fail"}
+  tikwm:         {enabled: false, note: "feed/search returns 403 since 2026-09-05; see DATA_SOURCES"}
   hackernews:    {enabled: true}
 
 llm:
