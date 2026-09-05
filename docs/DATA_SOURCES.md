@@ -61,12 +61,21 @@ Since tikwm died (decision 19), this is the **only video demand source**.
 > ever provisioned. The code was fine; the key was missing. Provision the key
 > during M2 and assert on startup that it is present and valid.
 
-### Reddit — public JSON / OAuth
-`/r/<sub>/new.json` returns 403 without credentials — this bit Retrend hard.
-Create a script-type app (free, 2 minutes) and use OAuth from the start. 100
-req/min with credentials, effectively nothing without them.
+### Reddit — **CLOSED, both doors**
 
-Subreddits are seeds, not a fixed list — put them in `config/seeds.yaml`.
+1. **The API is approval-only.** Self-service app registration ended with the
+   Responsible Builder Policy: `/prefs/apps` no longer creates a script app, it
+   shows the policy link. Access now needs a ticket describing the use case and
+   architecture, with reported multi-week waits and frequent rejection.
+2. **robots.txt is `User-agent: * / Disallow: /`.** Everything, every bot. That
+   rules out the public RSS feeds as well.
+
+An earlier version of `radar/discover.py` harvested subreddit RSS. That was a
+rule-2 violation and has been removed. There is no Reddit path in this project
+until an API application is approved, and `radar/collectors/reddit.py` stays
+dormant until then.
+
+The subreddit list in `config/seeds.yaml` is therefore unused.
 
 ### tikwm.com — unofficial TikTok mirror — **SEARCH IS DEAD**
 
@@ -128,8 +137,16 @@ saturation, not here.
 Trending-page scraping is still the better harvest source for discovery (M3);
 the search API covers per-term demand.
 
-### Hacker News — Algolia API, free, no key
-Unlimited practical use. Good for harvest and for "Show HN" launch signals.
+### Hacker News — Algolia API, free, no key — **LIVE**
+Good for "Show HN" launch signals. Now also the only harvest source, Reddit
+being closed.
+
+**Harvest does not currently produce anything.** Measured 2026-09-05: 1,000
+story titles over 90 days (the Algolia result cap) yield 292 candidate phrases
+through the product-noun gate, and **not one appears three times**. Not one
+appears twice. The gate is not too strict — without it the candidates are
+"feel like" and "wrong path" — the volume simply is not there. Discovery is
+seeds-only in practice until a wider harvest source exists.
 
 **Quote the phrase.** Algolia ORs the words otherwise: unquoted
 `ai voice clone` returns 219 stories matching almost anything with "ai" in it,

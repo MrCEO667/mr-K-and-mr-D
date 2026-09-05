@@ -115,13 +115,13 @@ M2 and M4 are in as far as the credentials allow:
 | Hacker News | `post_count` | live |
 | GitHub | `stars` + repo count | live |
 | Gumroad | supply count | live |
-| Reddit | `post_count`, `score_sum` | written, never run — needs a script app |
+| Reddit | — | closed: API approval-only, robots.txt disallows all |
 | Product Hunt | `launch_count`, `vote_sum` | live |
 | tikwm | — | dead, see decision 19 |
 
 ```bash
 python -m radar --once              # collect + count supply
-python -m radar --once --harvest    # also mine new terms from subreddit RSS
+python -m radar --once --harvest    # also mine terms from HN titles (yields nothing yet)
 python -m radar.report --term "faceless youtube"
 ```
 

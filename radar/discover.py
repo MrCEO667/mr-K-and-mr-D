@@ -88,13 +88,21 @@ def active_terms(conn: sqlite3.Connection, *, starred_only: bool = False) -> lis
 
 
 # --------------------------------------------------------------- harvest
-# Reddit's JSON API returns 403 without OAuth credentials, which is what bit
-# Retrend. The public RSS feeds still answer, so subreddit titles are usable
-# for term harvesting even while the API app cannot be created. Scores and
-# comment counts are not in RSS -- those still need OAuth.
+# Harvest reads Hacker News, not Reddit.
+#
+# Reddit is doubly closed. Its API moved to approval-only under the Responsible
+# Builder Policy, so /prefs/apps no longer creates a script app -- it shows the
+# policy link instead. And its robots.txt is "User-agent: * / Disallow: /",
+# which rules out the public RSS feeds too. An earlier version of this file
+# harvested those feeds; that was a rule-2 violation and it is gone.
+#
+# The HN Algolia API is documented for programmatic use, needs no key, and the
+# collector already depends on it.
 
-REDDIT_RSS = "https://www.reddit.com/r/{sub}/new/.rss"
-TITLE_RE = re.compile(r"<title>(.*?)</title>", re.DOTALL)
+HN_SEARCH = "https://hn.algolia.com/api/v1/search_by_date"
+HARVEST_WINDOW_DAYS = 30
+HARVEST_PAGES = 5
+HITS_PER_PAGE = 100
 STOP_WORDS = frozenset(
     [
         "a", "about", "after", "all", "also", "an", "and", "any", "are", "as", "at", "be",
@@ -176,56 +184,56 @@ def _ngrams(title: str, sizes: tuple[int, ...] = (2, 3)) -> list[str]:
     return grams
 
 
-def harvest_reddit(
+def harvest_hackernews(
     conn: sqlite3.Connection,
     *,
-    subreddits: list[str] | None = None,
-    seeds_path: Path | None = None,
-    opener=None,
+    http=None,
     max_new_terms: int = 50,
-    min_mentions: int = 2,
+    min_mentions: int = 3,
+    window_days: int = HARVEST_WINDOW_DAYS,
+    pages: int = HARVEST_PAGES,
 ) -> list[str]:
-    """Mine candidate terms from subreddit titles. Returns what was added.
+    """Mine candidate terms from recent Hacker News story titles.
 
-    A phrase has to appear at least `min_mentions` times before it becomes a
-    term: one person mentioning something once is not a signal, and every term
-    added costs 100 YouTube quota units on every sweep afterwards.
+    A phrase must appear at least `min_mentions` times and name something
+    sellable before it becomes a term. Both gates exist because the term list
+    is expensive: every accepted term costs 100 YouTube quota units on every
+    sweep, forever.
     """
-    import urllib.request
     from collections import Counter
 
-    from .collectors.base import RateLimiter
-    from .collectors.http import USER_AGENT
+    from .collectors.http import JsonHttp
 
     logger = log.get(__name__)
-    opener = opener or urllib.request.urlopen
-    subs = subreddits if subreddits is not None else load_subreddits(seeds_path)
-    _, patterns = load_seeds(seeds_path)
+    client = http or JsonHttp("hackernews")
+    _, patterns = load_seeds()
+    cutoff = now() - window_days * 86400
 
     counts: Counter[str] = Counter()
     failed = 0
-    # Reddit rate limits the feeds too; one 429 costs a whole subreddit.
-    limiter = RateLimiter(min_interval_s=2.0, max_retries=3, base_backoff_s=4.0)
-    for sub in subs:
-        url = REDDIT_RSS.format(sub=sub)
-        def fetch(url=url):
-            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with opener(request, timeout=25) as response:
-                return response.read().decode("utf-8", "replace")
-
+    for page in range(pages):
         try:
-            body = limiter.call(fetch, describe=f"reddit rss {sub}")
-        except Exception as exc:  # noqa: BLE001 -- one sub, not the harvest
+            payload = client.get(
+                HN_SEARCH,
+                params={
+                    "tags": "story",
+                    "numericFilters": f"created_at_i>{cutoff}",
+                    "hitsPerPage": HITS_PER_PAGE,
+                    "page": page,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 -- one page, not the harvest
             failed += 1
-            logger.warning("subreddit feed failed", extra={"sub": sub, "error": str(exc)})
+            logger.warning("harvest page failed", extra={"page": page, "error": str(exc)})
             continue
-        # The first <title> is the feed's own name, not a post.
-        for title in TITLE_RE.findall(body)[1:]:
+        hits = payload.get("hits") or []
+        if not hits:
+            break
+        for hit in hits:
+            title = hit.get("title") or hit.get("story_title") or ""
             counts.update(set(_ngrams(title)))
 
-    existing = {
-        r["normalized"] for r in conn.execute("SELECT normalized FROM terms")
-    }
+    existing = {r["normalized"] for r in conn.execute("SELECT normalized FROM terms")}
     ts = now()
     added: list[str] = []
     for phrase, seen in counts.most_common():
@@ -236,14 +244,19 @@ def harvest_reddit(
         conn.execute(
             "INSERT INTO terms "
             "(term, normalized, category, origin, first_seen_ts, last_seen_ts) "
-            "VALUES (?, ?, NULL, 'harvest:reddit', ?, ?) ON CONFLICT(term) DO NOTHING",
+            "VALUES (?, ?, NULL, 'harvest:hackernews', ?, ?) "
+            "ON CONFLICT(term) DO NOTHING",
             (phrase, normalize(phrase), ts, ts),
         )
         added.append(phrase)
 
     logger.info(
         "harvested",
-        extra={"subreddits": len(subs), "failed": failed, "candidates": len(counts),
-               "added": len(added)},
+        extra={
+            "pages": pages,
+            "failed": failed,
+            "candidates": len(counts),
+            "added": len(added),
+        },
     )
     return added

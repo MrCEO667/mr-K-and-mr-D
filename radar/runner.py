@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--harvest",
         action="store_true",
-        help="mine new terms from subreddit RSS before collecting (opt-in: "
+        help="mine new terms from Hacker News titles before collecting (opt-in: "
         "harvest quality is unproven and each new term costs quota every sweep)",
     )
     parser.add_argument("--config", default=None, help="path to config.yaml")
@@ -220,7 +220,7 @@ def execute(
         logger = log.get(__name__, run_id=run_id)
 
         if harvest:
-            added = discover.harvest_reddit(
+            added = discover.harvest_hackernews(
                 conn, max_new_terms=int(cfg.get("discovery.max_new_terms_per_run", 50))
             )
             logger.info("harvested terms", extra={"added": len(added)})
