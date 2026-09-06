@@ -102,25 +102,32 @@ temporal split with embargo: train windows end <= 2026-03-29 minus 97d,
 
                 precision@10                 precision@100        full test set
 horizon   random  momentum  model      momentum      model        AUC     use_model
-  +30d     0.59     1.00     1.00        0.85         0.98        0.75    yes
-  +60d     0.47     0.90     0.80        0.81         0.81        0.66    NO
-  +90d     0.36     0.30     0.90        0.64         0.64        0.65    yes
+  +30d     0.59     1.00     1.00        0.85         0.97        0.75    yes
+  +60d     0.47     0.90     0.90        0.81         0.81        0.65    NO
+  +90d     0.36     0.30     0.90        0.64         0.68        0.66    yes
 ```
+
+*(These numbers are the second run. The first, committed on the same day, was
+produced with two broken features -- see "Two features that measure nothing"
+below. The conclusion did not change; the +60d figures did.)*
 
 ### The verdict, in plain language
 
-**At +60d — the horizon the composite actually uses — the model loses to naive
-momentum, so the pipeline falls back to momentum and the cards say
-`momentum_fallback`.** That is the honesty clause firing, and it is the number
-that matters most, because `scoring.durability_horizon` is 60.
+**At +60d — the horizon the composite actually uses — the model does not beat
+naive momentum, so the pipeline falls back to momentum and the cards say
+`momentum_fallback`.** It *ties* it: 0.90 against 0.90 at precision@10, and
+0.81 against 0.81 at precision@100, with an AUC of 0.65. A tie is not a win,
+and the gate requires a win, so the model is refused here. That is the honesty
+clause firing, and it is the number that matters most, because
+`scoring.durability_horizon` is 60.
 
-The other two heads earn their place. +30d is the strongest result here: it
-ties momentum at precision@10 only because both saturate at 1.00, and pulls
-clearly ahead once you look past the top ten (0.98 vs 0.85, AUC 0.75). +90d is
-the opposite shape — a large win at the top of the ranking (0.90 vs 0.30) that
-flattens to a tie by rank 100. It is good at picking the few best and no better
-than a coin at ordering the rest, which is acceptable for a tool that only ever
-shows the top handful.
+The other two heads earn their place. +30d is the strongest result: it ties
+momentum at precision@10 only because both saturate at 1.00, and pulls clearly
+ahead once you look past the top ten (0.97 vs 0.85, AUC 0.75). +90d is the
+opposite shape — a large win at the top of the ranking (0.90 vs 0.30) that
+narrows to 0.68 vs 0.64 by rank 100. It is good at picking the few best and
+close to a coin at ordering the rest, which is acceptable for a tool that only
+ever shows the top handful.
 
 **We did not retune `durability_horizon` from 60 to 30 to make the model look
 useful.** That would be choosing the horizon on the strength of the test set,
@@ -157,6 +164,45 @@ monotonic, and 0.7 is "best" only in the sense that it happens to win on this
 test set. **Picking it for that reason would be selecting the label definition
 on the test metric, so 0.6 stands** as pre-registered. Re-run the sweep when
 the term count is large enough for the differences to mean something.
+
+### Two features that measure nothing
+
+`source_breadth` and `source_correlation` contribute **exactly zero** to every
+head, and it took a code review to notice, because a dead feature looks the
+same as a useless one in an importance table.
+
+There were two separate causes.
+
+The first was a bug. `features.build()` received each other source's *full*
+history and `_correlation` truncated to the shorter series, so a 14-day window
+was compared against the **first 14 days of a two-year series**. A source
+rising in perfect lockstep with the window scored -1.0. Breadth had the same
+root cause: it counted sources with any data ever for the term, so it was
+constant across all ~600 windows of that term. Both are fixed -- `build()` now
+slices the other sources to the window itself, so no caller can get it wrong.
+
+The second cause is data, and it is not fixed. **Only Google Trends has
+history:**
+
+| source | days of history | rows |
+|---|---|---|
+| google_trends | 720 | 18,000 |
+| youtube, hackernews, github, product_hunt | **1** | 25-150 each |
+
+Trends backfills two years on demand; the others only ever report today, and
+there is no historical endpoint to ask. So across all 15,374 training windows
+`source_breadth` is **constant 1** and `source_correlation` is **constant
+0.0**. They are not weak features, they are absent ones, and a constant column
+cannot inform a split.
+
+This matters more than an importance of zero suggests, because the section
+above claims cross-source breadth is "the feature most likely to earn its
+keep". **That claim is currently untestable.** The durability model is, today,
+a Google-Trends-shape model with seven live features. The two cross-source
+features will start carrying information once the daily sweeps have
+accumulated a few months of their own history, and the backtest should be
+re-run then -- not because the code changed, but because the data will finally
+exist. Decision 31.
 
 ### What this backtest cannot tell you
 

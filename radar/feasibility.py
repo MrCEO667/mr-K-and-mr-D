@@ -90,7 +90,11 @@ RAIL_PATTERNS: dict[str, tuple[str, ...]] = {
     # niche" would otherwise put a payment rail on the card and, once
     # enforcement is on, reject the opportunity for using it.
     "wise": (r"\bwise\.com\b", r"\btransferwise\b", r"\bwise (?:account|transfer|payout)\b"),
-    "crypto_usdt": (r"\busdt\b", r"\bcrypto\b"),
+    # Not a bare "crypto": a crypto-*topic* product ("a crypto portfolio
+    # tracker", "a newsletter about crypto") says nothing about how it gets
+    # paid, and under enforcement that misreading becomes a hard rejection.
+    "crypto_usdt": (r"\busdt\b", r"\busdc\b", r"\bcrypto (?:payment|wallet|checkout)s?\b",
+                    r"\bpaid in crypto\b", r"\bcrypto payout\b"),
     "kaspi": (r"\bkaspi\b",),
     "stripe": (r"\bstripe\b",),
 }
@@ -164,10 +168,17 @@ def margin_multiple(price: float | None, cost_per_sale: float | None) -> float |
     A zero marginal cost returns infinity rather than a rejection. It is
     implausible often enough to be worth a note, but a genuinely free-to-
     deliver digital download does exist and refusing it would be wrong.
+
+    A *negative* cost is different: it is not a cheap product, it is a broken
+    estimate. Returning infinity for it would clear the margin gate and print
+    "cost per sale was estimated at zero", which is not what happened. It is
+    unknown, and unknown is a rejection.
     """
     if price is None or cost_per_sale is None:
         return None
-    if cost_per_sale <= 0:
+    if cost_per_sale < 0:
+        return None
+    if cost_per_sale == 0:
         return math.inf
     return price / cost_per_sale
 
@@ -299,7 +310,16 @@ def evaluate(opportunity: dict, cfg, capabilities: Capabilities | None = None) -
     rail = detect_rail(text)
     if caps.rails_enforced:
         if rail is None:
-            notes.append("No payment rail is named in the playbook; check before starting.")
+            # Under enforcement a silent playbook cannot pass. Noting it and
+            # waving it through would reject every playbook honest enough to
+            # name Gumroad while passing every one that said nothing -- a gate
+            # that rewards vagueness is worse than no gate.
+            rejections.append(
+                Rejection(
+                    "unknown_payment_rail",
+                    "No payment rail is named, so there is no way to check we can collect.",
+                )
+            )
         elif rail not in caps.rails_available:
             rejections.append(
                 Rejection(

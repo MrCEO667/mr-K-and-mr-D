@@ -293,11 +293,30 @@ class TrendsCollector(Collector):
                 previous, self.timeframe = self.timeframe, timeframe
                 try:
                     frame = self._fetch_batch(batch)
+                except QuotaExceeded:
+                    # Spent, not sick. Stop asking, but keep what was collected.
+                    result.partial = True
+                    result.errors.append(f"{timeframe} {batch}: quota exceeded")
+                    logger.warning("history stopped on quota", extra={"timeframe": timeframe})
+                    return result
                 except SourceUnavailable as exc:
                     self._request_failures += 1
                     result.partial = True
                     result.errors.append(f"{timeframe} {batch}: {exc}")
                     logger.warning("history chunk failed", extra={"timeframe": timeframe})
+                    continue
+                except Exception as exc:  # noqa: BLE001 -- one chunk, not the run
+                    # collect() degrades on an unexpected error; history() used
+                    # to let it propagate, which threw away a four-minute
+                    # backfill of everything already collected, because the
+                    # caller only writes readings after this returns.
+                    self._request_failures += 1
+                    result.partial = True
+                    result.errors.append(f"{timeframe} {batch}: {type(exc).__name__}: {exc}")
+                    logger.warning(
+                        "history chunk failed",
+                        extra={"timeframe": timeframe, "error": str(exc)},
+                    )
                     continue
                 finally:
                     self.timeframe = previous
@@ -308,11 +327,18 @@ class TrendsCollector(Collector):
 
                 for query in batch:
                     if query not in frame:
+                        # Trends dropped the term from the response. Silently
+                        # skipping left no trace, so health() reported the
+                        # source healthier than it was.
+                        self._term_failures += 1
+                        result.partial = True
+                        result.errors.append(f"{query} {timeframe}: missing from response")
                         continue
                     term = by_query[query]
                     try:
                         points = self._rescale(frame, query)
                     except (ZeroSeries, SourceUnavailable) as exc:
+                        self._term_failures += 1
                         result.partial = True
                         result.errors.append(f"{query} {timeframe}: {exc}")
                         continue

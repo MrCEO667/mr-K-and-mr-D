@@ -202,6 +202,13 @@ def test_margin_is_computed_here_and_never_read_from_the_payload():
     assert "low_margin" in verdict.codes
 
 
+def test_a_negative_cost_per_sale_is_rejected_as_unknown():
+    verdict = evaluate(cost_per_sale_usd=-5.0)
+    assert not verdict.passed
+    assert "unknown_margin" in verdict.codes
+    assert not any("zero" in note for note in verdict.notes)
+
+
 def test_a_zero_cost_per_sale_is_noted_not_rejected():
     verdict = evaluate(cost_per_sale_usd=0.0)
     assert verdict.passed
@@ -214,7 +221,9 @@ def test_margin_multiple_helper_handles_the_edges():
     assert feasibility.margin_multiple(None, 3.4) is None
     assert feasibility.margin_multiple(29.0, None) is None
     assert feasibility.margin_multiple(29.0, 0) == math.inf
-    assert feasibility.margin_multiple(29.0, -1) == math.inf
+    # A negative cost is a broken estimate, not a free product. Returning inf
+    # would clear the margin gate and explain it as "estimated at zero".
+    assert feasibility.margin_multiple(29.0, -1) is None
 
 
 # --- modes, accumulation, persistence ----------------------------------------
@@ -266,6 +275,23 @@ def test_rails_are_noted_but_not_gated_by_default():
     assert verdict.passed
     assert verdict.rail == "fiverr_payout"
     assert any("not enforced" in note for note in verdict.notes)
+
+
+def test_enforcement_does_not_reward_a_playbook_that_names_no_rail():
+    """A gate that passes silence and rejects honesty is worse than no gate."""
+    caps = feasibility.Capabilities(
+        cannot_build=[], rails_enforced=True, rails_available=["gumroad"]
+    )
+    vague = feasibility.evaluate(
+        opportunity(
+            playbook={"offer": "A template pack", "channel": "a website", "steps": ["Build"]},
+            requirements=["a domain"],
+        ),
+        FakeConfig(),
+        caps,
+    )
+    assert not vague.passed
+    assert "unknown_payment_rail" in vague.codes
 
 
 def test_an_unavailable_rail_is_gated_once_enforcement_is_on():

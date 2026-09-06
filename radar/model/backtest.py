@@ -65,9 +65,22 @@ class BacktestResult:
 
     @property
     def wins_tiebreak(self) -> bool:
+        """Only meaningful while the tiebreak k is smaller than the test set.
+
+        precision_at_k divides by however many rows exist, so once k >= n both
+        rankers score every label and come out identical -- the tiebreak would
+        be structurally dead on exactly the small test sets it was added for.
+        Refusing to claim a win there beats reporting a confident one.
+        """
         if self.wide_model_precision is None or self.wide_momentum_precision is None:
             return False
+        if not self.tiebreak_is_measurable:
+            return False
         return self.wide_model_precision > self.wide_momentum_precision
+
+    @property
+    def tiebreak_is_measurable(self) -> bool:
+        return self.n > self.tiebreak_k
 
     @property
     def use_model(self) -> bool:
@@ -188,24 +201,44 @@ def verdict(results: list[BacktestResult]) -> str:
             f"random={r.random_precision:.2f}"
         )
 
-    winners = [r for r in results if r.beats_momentum]
+    # Reported on use_model, not on beats_momentum. The loader gates on
+    # use_model, so a verdict announcing a winner the loader then refuses --
+    # or staying silent about one it accepts -- would be precisely the
+    # dishonesty this function exists to prevent.
+    winners = [r for r in results if r.use_model]
+    lines.append("")
     if not winners:
-        lines.append("")
         lines.append(
-            "The model does not beat naive momentum at any horizon. Momentum is "
-            "the better ranker, so scoring falls back to it and the cards say "
+            "No horizon earned the model. Momentum is the better ranker, so "
+            "scoring falls back to it everywhere and the cards say "
             "'momentum_fallback'. This is the honest outcome, not a bug to hide."
         )
     elif len(winners) < len(results):
-        beaten = ", ".join(f"+{r.horizon}d" for r in results if not r.beats_momentum)
-        lines.append("")
+        refused = ", ".join(f"+{r.horizon}d" for r in results if not r.use_model)
+        kept = ", ".join(f"+{r.horizon}d" for r in winners)
         lines.append(
-            f"The model beats momentum at some horizons but not at {beaten}. "
-            "Use the model only where it wins; fall back elsewhere."
+            f"The model is used at {kept} and refused at {refused}, which falls "
+            "back to momentum."
         )
     else:
-        lines.append("")
-        lines.append("The model beats naive momentum at every horizon tested.")
+        lines.append("The model earned every horizon tested.")
+
+    # Where the headline metric and the gate disagree, say so, rather than
+    # leaving a reader to infer a win from the table above.
+    for r in results:
+        if r.beats_momentum and not r.use_model:
+            auc = "unmeasured" if r.auc is None else f"{r.auc:.2f}"
+            lines.append(
+                f"  +{r.horizon}d beat momentum at precision@{r.k} but is still "
+                f"refused: AUC {auc} does not clear the {AUC_FLOOR} floor, so the "
+                "top ten was luck rather than ranking."
+            )
+        elif r.use_model and not r.beats_momentum:
+            lines.append(
+                f"  +{r.horizon}d tied momentum at precision@{r.k} and won the "
+                f"precision@{r.tiebreak_k} tiebreak "
+                f"({r.wide_model_precision:.2f} vs {r.wide_momentum_precision:.2f})."
+            )
     return "\n".join(lines)
 
 

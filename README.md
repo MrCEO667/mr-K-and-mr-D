@@ -135,10 +135,15 @@ python scripts/train_model.py --sweep           # label thresholds, writes no mo
 ```
 
 **The honest number:** at +60d — the horizon the composite uses — the model
-**loses** to naive momentum (precision@10 0.80 vs 0.90), so scoring falls back
-to momentum and cards say `momentum_fallback`. The +30d and +90d heads do beat
-it and are kept. The backtest rests on 25 terms and is underpowered; the full
-verdict, including what it cannot tell you, is in [docs/MODEL.md](docs/MODEL.md).
+does not beat naive momentum. It ties it (precision@10 0.90 vs 0.90, AUC 0.65),
+a tie is not a win, so scoring falls back to momentum and cards say
+`momentum_fallback`. The +30d and +90d heads do earn their place and are kept.
+
+Two of the nine features, `source_breadth` and `source_correlation`, currently
+measure **nothing** — only Google Trends has history, so there is no second
+source to correlate against. The backtest also rests on 25 terms and is
+underpowered. The full verdict, including what it cannot tell you, is in
+[docs/MODEL.md](docs/MODEL.md).
 
 The verdict is recorded in `models/metadata.json` and enforced by
 `DurabilityModel.load()`: a head that lost is never loaded, and a model with no

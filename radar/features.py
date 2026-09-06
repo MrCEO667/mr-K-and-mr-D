@@ -128,10 +128,16 @@ def _magnitude_bucket(values: list[float]) -> int:
 
 
 def _correlation(a: list[float], b: list[float]) -> float:
-    n = min(len(a), len(b))
-    if n < 3:
+    """Pearson correlation of two already day-aligned, equal-length series.
+
+    The caller aligns. This used to truncate to `min(len(a), len(b))`, which
+    silently compared a 14-day window against the *first* 14 days of the other
+    source's entire history -- two years earlier, in the training set. It read
+    -1.0 for a source rising in perfect lockstep with the window.
+    """
+    n = len(a)
+    if n < 3 or n != len(b):
         return 0.0
-    a, b = a[:n], b[:n]
     mean_a, mean_b = sum(a) / n, sum(b) / n
     cov = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b, strict=False))
     var_a = sum((x - mean_a) ** 2 for x in a)
@@ -145,25 +151,51 @@ def build(
     term_id: int,
     window: list[tuple[int, float]],
     *,
+    days_observed: int,
     other_sources: dict[str, list[tuple[int, float]]] | None = None,
-    days_observed: int | None = None,
 ) -> FeatureVector:
     """One window -> one FeatureVector.
 
     `window` is (unix_ts, value) for the primary series, oldest first.
     `other_sources` is the same shape per source, used only for breadth and
-    correlation.
+    correlation; it may be the source's *full* history, because this function
+    slices it to the window itself.
+
+    That slicing lives here rather than at the call site on purpose. When the
+    caller was trusted to do it, `dataset.build_samples` passed two years of
+    history to every window and both cross-source features became garbage --
+    correlation against a slice two years stale, breadth constant per term.
+    Neither failure is visible in a run; both show up only as a feature
+    importance of zero, which is easy to read as "the feature is useless".
+
+    `days_observed` is required for the same reason. It cannot be derived from
+    the window (14 days always look like 14 days), so a default would be wrong
+    every time it was used and would fork training from scoring silently --
+    the one thing this module's header forbids.
     """
     window = sorted(window)
     values = [v for _, v in window]
     others = other_sources or {}
 
-    breadth = 1 + sum(1 for series in others.values() if series)
-    correlations = [
-        _correlation(values, [v for _, v in sorted(series)])
-        for series in others.values()
-        if len(series) >= 3
-    ]
+    by_day = {ts // DAY: value for ts, value in window}
+    window_days = sorted(by_day)
+
+    breadth = 1
+    correlations = []
+    for series in others.values():
+        seen: dict[int, float] = {}
+        for ts, value in sorted(series):
+            seen.setdefault(ts // DAY, value)
+        common = [day for day in window_days if day in seen]
+        if not common:
+            # The source has data for this term, but not during this window.
+            # It did not "see" the term here, so it is not breadth.
+            continue
+        breadth += 1
+        if len(common) >= 3:
+            correlations.append(
+                _correlation([by_day[d] for d in common], [seen[d] for d in common])
+            )
 
     return FeatureVector(
         term_id=term_id,
@@ -173,7 +205,7 @@ def build(
         volatility=_volatility(values),
         seasonality_amp=_seasonality_amp(window),
         peak_relative=_peak_relative(values),
-        days_observed=days_observed if days_observed is not None else len(values),
+        days_observed=days_observed,
         source_breadth=breadth,
         source_correlation=sum(correlations) / len(correlations) if correlations else 0.0,
         magnitude_bucket=_magnitude_bucket(values),

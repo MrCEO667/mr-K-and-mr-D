@@ -54,7 +54,7 @@ def test_an_all_zero_window_has_no_peak_to_measure_against():
 def sample(term_id, day, labels=None):
     window = [((day - 13 + i) * DAY, float(i)) for i in range(14)]
     return dataset.Sample(
-        features=features.build(term_id, window),
+        features=features.build(term_id, window, days_observed=14),
         labels=labels if labels is not None else {30: 1, 60: 1, 90: 1},
         term_id=term_id,
         window_end_ts=day * DAY,

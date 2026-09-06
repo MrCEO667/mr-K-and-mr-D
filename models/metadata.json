@@ -15,57 +15,57 @@
       "n_train": 9999,
       "n_test": 3084,
       "positive_rate": 0.6712671267126713,
-      "auc": 0.7501943451077044,
+      "auc": 0.7517590336483574,
       "importance": {
-        "slope": -0.007880332620410902,
-        "acceleration": -0.006801064419845959,
-        "volatility": 0.14464796666026394,
-        "seasonality_amp": -0.005539774382703455,
-        "peak_relative": 0.016836350844176385,
+        "slope": -0.009215691775781165,
+        "acceleration": -0.002333047732712301,
+        "volatility": 0.14719303508571266,
+        "seasonality_amp": -0.00122326271012676,
+        "peak_relative": 0.017972120487492305,
         "days_observed": 0.0,
         "source_breadth": 0.0,
-        "source_correlation": -0.00011041305619285957,
-        "magnitude_bucket": 0.007893670241350436
+        "source_correlation": 0.0,
+        "magnitude_bucket": 0.007872606296306772
       }
     },
     "60": {
       "n_train": 9999,
       "n_test": 2345,
       "positive_rate": 0.6421642164216421,
-      "auc": 0.6598981483907214,
+      "auc": 0.653768931620573,
       "importance": {
-        "slope": -0.008947601291265261,
-        "acceleration": -0.0004047575384453328,
-        "volatility": 0.08630352012435272,
-        "seasonality_amp": 0.009207033262599062,
-        "peak_relative": 0.019426906406550693,
+        "slope": -0.011676185236610537,
+        "acceleration": 0.0007114912717334221,
+        "volatility": 0.08670041829311967,
+        "seasonality_amp": 0.009441722773833594,
+        "peak_relative": 0.015322859995517347,
         "days_observed": 0.0,
         "source_breadth": 0.0,
-        "source_correlation": -0.00035883844337898375,
-        "magnitude_bucket": 0.0011886568919395213
+        "source_correlation": 0.0,
+        "magnitude_bucket": 0.0010050532836156645
       }
     },
     "90": {
       "n_train": 9999,
       "n_test": 1595,
       "positive_rate": 0.6585658565856586,
-      "auc": 0.6491787664422475,
+      "auc": 0.6595580136392398,
       "importance": {
-        "slope": -0.022323458220203117,
-        "acceleration": -0.016811518026629037,
-        "volatility": 0.09848960652433736,
-        "seasonality_amp": 0.008410864521572026,
-        "peak_relative": 0.019562968493155242,
+        "slope": -0.019699896550685093,
+        "acceleration": -0.011763593206493473,
+        "volatility": 0.11091674841059676,
+        "seasonality_amp": 0.008905680338269306,
+        "peak_relative": 0.021374670652869042,
         "days_observed": 0.0,
         "source_breadth": 0.0,
-        "source_correlation": 0.0006319112679403993,
-        "magnitude_bucket": -0.0009446027245001209
+        "source_correlation": 0.0,
+        "magnitude_bucket": -0.0015587702588240938
       }
     }
   },
   "backtest": {
     "k": 10,
-    "verdict": "+30d  n=3084   base=0.58  model=1.00  momentum=1.00  random=0.59\n+60d  n=2345   base=0.49  model=0.80  momentum=0.90  random=0.47\n+90d  n=1595   base=0.38  model=0.90  momentum=0.30  random=0.36\n\nThe model beats momentum at some horizons but not at +30d, +60d. Use the model only where it wins; fall back elsewhere.",
+    "verdict": "+30d  n=3084   base=0.58  model=1.00  momentum=1.00  random=0.59\n+60d  n=2345   base=0.49  model=0.90  momentum=0.90  random=0.47\n+90d  n=1595   base=0.38  model=0.90  momentum=0.30  random=0.36\n\nThe model is used at +30d, +90d and refused at +60d, which falls back to momentum.\n  +30d tied momentum at precision@10 and won the precision@100 tiebreak (0.97 vs 0.85).",
     "horizons": {
       "30": {
         "horizon": 30,
@@ -76,9 +76,9 @@
         "momentum_precision": 1.0,
         "random_precision": 0.586,
         "tiebreak_k": 100,
-        "wide_model_precision": 0.98,
+        "wide_model_precision": 0.97,
         "wide_momentum_precision": 0.85,
-        "auc": 0.7501943451077044,
+        "auc": 0.7517590336483574,
         "use_model": true
       },
       "60": {
@@ -86,13 +86,13 @@
         "n": 2345,
         "k": 10,
         "base_rate": 0.48955223880597015,
-        "model_precision": 0.8,
+        "model_precision": 0.9,
         "momentum_precision": 0.9,
         "random_precision": 0.47350000000000003,
         "tiebreak_k": 100,
         "wide_model_precision": 0.81,
         "wide_momentum_precision": 0.81,
-        "auc": 0.6598981483907214,
+        "auc": 0.653768931620573,
         "use_model": false
       },
       "90": {
@@ -104,9 +104,9 @@
         "momentum_precision": 0.3,
         "random_precision": 0.35600000000000004,
         "tiebreak_k": 100,
-        "wide_model_precision": 0.64,
+        "wide_model_precision": 0.68,
         "wide_momentum_precision": 0.64,
-        "auc": 0.6491787664422475,
+        "auc": 0.6595580136392398,
         "use_model": true
       }
     }

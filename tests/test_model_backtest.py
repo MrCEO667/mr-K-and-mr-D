@@ -66,7 +66,7 @@ def test_a_model_that_loses_to_momentum_is_reported_as_losing():
     assert not result.use_model
 
     text = backtest.verdict([result])
-    assert "does not beat naive momentum" in text
+    assert "No horizon earned the model" in text
     assert "momentum_fallback" in text
     assert not backtest.should_use_model([result], 30)
 
@@ -81,7 +81,7 @@ def test_a_model_that_wins_says_so():
     assert result.model_precision == 1.0
     assert result.momentum_precision == 0.0
     assert result.use_model
-    assert "beats naive momentum at every horizon" in backtest.verdict([result])
+    assert "earned every horizon tested" in backtest.verdict([result])
 
 
 def test_a_head_that_wins_on_ten_rows_but_cannot_rank_the_rest_is_refused():
@@ -224,3 +224,48 @@ def test_a_pure_fallback_bundle_names_momentum_for_every_horizon(tmp_path):
     scored = predict.DurabilityModel(tmp_path).load().score(sample(0.5, 1).features)
     assert scored.scorer == predict.MOMENTUM_SCORER
     assert all(scored.scorer_for(h) == predict.MOMENTUM_SCORER for h in dataset.HORIZONS)
+
+
+def test_the_verdict_describes_what_the_loader_actually_does():
+    """The verdict text is what PROMPT.md requires be pasted into MODEL.md, and
+    the loader gates on use_model. Reporting beats_momentum instead announced a
+    winner the loader then refused, and stayed silent about one it accepted."""
+    # Beat momentum on the headline metric, but cannot rank the rest.
+    lucky = backtest.BacktestResult(
+        90, 1595, 10, 0.38, 0.90, 0.30, 0.36,
+        tiebreak_k=100, wide_model_precision=0.64, wide_momentum_precision=0.64, auc=0.51,
+    )
+    # Tied the headline metric, won the tiebreak, ranks well overall.
+    tied = backtest.BacktestResult(
+        30, 3084, 10, 0.58, 1.00, 1.00, 0.59,
+        tiebreak_k=100, wide_model_precision=0.98, wide_momentum_precision=0.85, auc=0.75,
+    )
+    text = backtest.verdict([tied, lucky])
+
+    assert lucky.beats_momentum and not lucky.use_model
+    assert tied.use_model and not tied.beats_momentum
+
+    assert "used at +30d" in text
+    assert "refused at +90d" in text
+    assert "is still refused" in text          # explains the lucky top ten
+    assert "won the precision@100 tiebreak" in text
+
+
+def test_the_tiebreak_refuses_to_rule_when_k_covers_the_whole_test_set():
+    """precision_at_k divides by whatever exists, so at k >= n both rankers
+    score every label and tie by construction -- the tiebreak would be dead
+    exactly on the small test sets it was introduced to rescue."""
+    small = backtest.BacktestResult(
+        30, 40, 10, 0.5, 1.00, 1.00, 0.5,
+        tiebreak_k=100, wide_model_precision=0.5, wide_momentum_precision=0.5, auc=0.9,
+    )
+    assert not small.tiebreak_is_measurable
+    assert not small.wins_tiebreak
+    assert not small.use_model
+
+    big = backtest.BacktestResult(
+        30, 3084, 10, 0.5, 1.00, 1.00, 0.5,
+        tiebreak_k=100, wide_model_precision=0.98, wide_momentum_precision=0.85, auc=0.9,
+    )
+    assert big.tiebreak_is_measurable
+    assert big.use_model

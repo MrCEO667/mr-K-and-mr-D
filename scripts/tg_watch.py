@@ -18,7 +18,10 @@ API = "https://api.telegram.org/bot{token}/{method}"
 
 
 def token() -> str:
-    for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
+    env = ROOT / ".env"
+    if not env.exists():
+        sys.exit(f"no {env}; copy .env.example and fill in TELEGRAM_BOT_TOKEN")
+    for line in env.read_text(encoding="utf-8").splitlines():
         key, _, value = line.partition("=")
         if key.strip() == "TELEGRAM_BOT_TOKEN" and value.strip():
             return value.strip()
@@ -29,7 +32,12 @@ def call(method: str, params: dict | None = None) -> dict:
     url = API.format(token=token(), method=method)
     data = urllib.parse.urlencode(params).encode() if params else None
     with urllib.request.urlopen(urllib.request.Request(url, data=data), timeout=40) as r:
-        return json.load(r)
+        payload = json.load(r)
+    if not payload.get("ok"):
+        # Telegram answers a rejected call with 200 and ok:false. Reading
+        # ["result"] off that raises KeyError and hides what went wrong.
+        sys.exit(f"telegram {method} failed: {payload.get('description', payload)}")
+    return payload
 
 
 def read_offset() -> int:
@@ -45,9 +53,6 @@ def poll() -> list[dict]:
     if offset:
         params["offset"] = offset
     result = call("getUpdates", params).get("result", [])
-    if result:
-        OFFSET_FILE.parent.mkdir(parents=True, exist_ok=True)
-        OFFSET_FILE.write_text(str(result[-1]["update_id"] + 1), encoding="utf-8")
     messages = []
     for update in result:
         msg = update.get("message") or update.get("edited_message") or {}
@@ -62,6 +67,12 @@ def poll() -> list[dict]:
                 "date": msg.get("date"),
             }
         )
+    # The offset is committed only once the batch has been turned into
+    # messages. Advancing it first meant a crash here skipped those updates
+    # permanently, since Telegram will not serve them again.
+    if result:
+        OFFSET_FILE.parent.mkdir(parents=True, exist_ok=True)
+        OFFSET_FILE.write_text(str(result[-1]["update_id"] + 1), encoding="utf-8")
     return messages
 
 
