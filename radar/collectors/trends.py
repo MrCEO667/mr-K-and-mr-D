@@ -47,6 +47,14 @@ BATCH_SIZE = MAX_TERMS_PER_REQUEST - 1  # one slot is always the anchor
 
 METRIC = "interest"
 
+# Trends returns DAILY points only for an explicit date range of roughly eight
+# months or less. "today 5-y" and "today 12-m" both come back weekly, which is
+# useless for a 14-day feature window. Multi-year daily history is therefore
+# chained: overlapping date-range requests, each carrying the anchor, each
+# rescaled by its own anchor mean so the chunks share a scale.
+CHUNK_DAYS = 240
+CHUNK_OVERLAP_DAYS = 30
+
 
 class ZeroSeries(RuntimeError):
     """A term that came back as all zeros against the anchor. A term-level
@@ -245,6 +253,91 @@ class TrendsCollector(Collector):
                 "partial": result.partial,
             },
         )
+        return result
+
+    def history(
+        self,
+        terms: list[Term],
+        run_id: str,
+        *,
+        days: int = 720,
+    ) -> CollectResult:
+        """Backfill daily history by walking overlapping date-range chunks.
+
+        This is the unlock M5 depends on: the past of every window is already
+        known, so labels are free. It is a separate operation from a sweep --
+        it is run rarely and costs many requests.
+        """
+        import datetime as _dt
+
+        logger = log.get(__name__, run_id=run_id, source=self.source)
+        result = CollectResult()
+        by_query = {t.term: t for t in terms if t.term != self.anchor}
+        today = _dt.date.today()
+
+        starts: list[_dt.date] = []
+        cursor = today - _dt.timedelta(days=days)
+        while cursor < today:
+            starts.append(cursor)
+            cursor += _dt.timedelta(days=CHUNK_DAYS - CHUNK_OVERLAP_DAYS)
+
+        batches = [
+            list(by_query)[i : i + BATCH_SIZE] for i in range(0, len(by_query), BATCH_SIZE)
+        ]
+
+        seen: set[tuple[int, int]] = set()
+        for start in starts:
+            end = min(start + _dt.timedelta(days=CHUNK_DAYS), today)
+            timeframe = f"{start.isoformat()} {end.isoformat()}"
+            for batch in batches:
+                previous, self.timeframe = self.timeframe, timeframe
+                try:
+                    frame = self._fetch_batch(batch)
+                except SourceUnavailable as exc:
+                    self._request_failures += 1
+                    result.partial = True
+                    result.errors.append(f"{timeframe} {batch}: {exc}")
+                    logger.warning("history chunk failed", extra={"timeframe": timeframe})
+                    continue
+                finally:
+                    self.timeframe = previous
+
+                if frame is None or len(frame) == 0:
+                    result.partial = True
+                    continue
+
+                for query in batch:
+                    if query not in frame:
+                        continue
+                    term = by_query[query]
+                    try:
+                        points = self._rescale(frame, query)
+                    except (ZeroSeries, SourceUnavailable) as exc:
+                        result.partial = True
+                        result.errors.append(f"{query} {timeframe}: {exc}")
+                        continue
+                    for ts, value in points:
+                        key = (term.id, ts)
+                        if key in seen:
+                            # Chunks overlap by design; the first reading for a
+                            # day wins so a stitched series has one value a day.
+                            continue
+                        seen.add(key)
+                        result.readings.append(
+                            Reading(
+                                term_id=term.id,
+                                source=self.source,
+                                metric=METRIC,
+                                value=value,
+                                ts=ts,
+                            )
+                        )
+
+            logger.info(
+                "history chunk done",
+                extra={"timeframe": timeframe, "readings_so_far": len(result.readings)},
+            )
+
         return result
 
     def health(self) -> SourceHealth:

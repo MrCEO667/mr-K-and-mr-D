@@ -125,4 +125,23 @@ python -m radar --once --harvest    # also mine terms from HN titles (yields not
 python -m radar.report --term "faceless youtube"
 ```
 
-M5 (durability model) is next.
+M5 landed: two years of daily Trends history per term, 15,374 auto-labelled
+windows, and three gradient-boosted heads with a mandatory backtest.
+
+```bash
+python scripts/backfill_history.py --days 720   # once, slow, ~4 min
+python scripts/train_model.py                   # train + backtest + record verdict
+python scripts/train_model.py --sweep           # label thresholds, writes no model
+```
+
+**The honest number:** at +60d — the horizon the composite uses — the model
+**loses** to naive momentum (precision@10 0.80 vs 0.90), so scoring falls back
+to momentum and cards say `momentum_fallback`. The +30d and +90d heads do beat
+it and are kept. The backtest rests on 25 terms and is underpowered; the full
+verdict, including what it cannot tell you, is in [docs/MODEL.md](docs/MODEL.md).
+
+The verdict is recorded in `models/metadata.json` and enforced by
+`DurabilityModel.load()`: a head that lost is never loaded, and a model with no
+recorded backtest is not loaded at all.
+
+M6 (feasibility gate) is next.

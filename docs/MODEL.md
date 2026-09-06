@@ -37,7 +37,8 @@ For window ending at day `t`:
 label_N = 1 if mean(interest[t+N : t+N+7]) >= 0.6 * max(interest[t-14 : t])
 ```
 
-`0.6` is a config constant. Sweep it during M5 and record the chosen value here.
+`0.6` is a config constant. Swept during M5; **0.6 stands**, and the reason
+it was not moved is under "The label threshold sweep" below.
 
 ### Features (14-day window)
 Slope (OLS), acceleration (2nd difference), volatility (σ/μ), weekday
@@ -63,6 +64,8 @@ windows after. A random split puts a term's future in the training set and its
 past in the test set. You will get a great AUC and a worthless model.
 
 Also: **group by term.** The same term appearing in both splits leaks.
+*Not done at M5, deliberately — 25 terms is too few to group and still
+measure anything. Decision 24, and the caveat at the end of the backtest.*
 
 ## Backtest — mandatory
 
@@ -88,14 +91,86 @@ elevated at +90 days.
 > worst possible outcome. It is worse than having no model, because it produces
 > false confidence in every card it touches. Write the real number here.
 
-**Result: _to be filled in at M5._**
+**Result, 2026-09-06.** Run it yourself with `python scripts/train_model.py`;
+the same block is written into `models/metadata.json` under `backtest`.
 
 ```
-precision@10   random: ___   momentum: ___   model: ___
-temporal split: train < ______  test >= ______
-n_terms: ___   n_windows: ___   label threshold: ___
-verdict: ___
+label threshold: 0.6      window: 14d      stride: 1 day
+n_terms: 25   n_windows: 15,374   train: 9,999   test: 3,084 (+30d)
+temporal split with embargo: train windows end <= 2026-03-29 minus 97d,
+                             test windows end 2026-03-29 .. 2026-07-30
+
+                precision@10                 precision@100        full test set
+horizon   random  momentum  model      momentum      model        AUC     use_model
+  +30d     0.59     1.00     1.00        0.85         0.98        0.75    yes
+  +60d     0.47     0.90     0.80        0.81         0.81        0.66    NO
+  +90d     0.36     0.30     0.90        0.64         0.64        0.65    yes
 ```
+
+### The verdict, in plain language
+
+**At +60d — the horizon the composite actually uses — the model loses to naive
+momentum, so the pipeline falls back to momentum and the cards say
+`momentum_fallback`.** That is the honesty clause firing, and it is the number
+that matters most, because `scoring.durability_horizon` is 60.
+
+The other two heads earn their place. +30d is the strongest result here: it
+ties momentum at precision@10 only because both saturate at 1.00, and pulls
+clearly ahead once you look past the top ten (0.98 vs 0.85, AUC 0.75). +90d is
+the opposite shape — a large win at the top of the ranking (0.90 vs 0.30) that
+flattens to a tie by rank 100. It is good at picking the few best and no better
+than a coin at ordering the rest, which is acceptable for a tool that only ever
+shows the top handful.
+
+**We did not retune `durability_horizon` from 60 to 30 to make the model look
+useful.** That would be choosing the horizon on the strength of the test set,
+which is the same sin as choosing the threshold on it. 60 was picked before any
+of this was measured and it stays.
+
+### Why the gate is not precision@10 alone
+
+precision@10 is the metric PROMPT.md mandates and it is reported above
+unchanged. It is also, at this data size, badly underpowered: ten rows drawn
+from 25 terms, where the top ten at +30d came from a *single* term. Taken alone
+it approved the wrong heads in both directions — it rejected +30d on a
+saturated tie and, on the first run, approved a head on a lucky top ten.
+
+So `BacktestResult.use_model` requires three things, all fixed before the
+numbers were looked at:
+
+1. Beat random ordering.
+2. Beat momentum at precision@10. A *tie* is not a win, but it is not evidence
+   either, and only then is precision@100 consulted as a tiebreak.
+3. Clear an AUC floor of 0.55 on the full test set (`backtest.AUC_FLOOR`), so a
+   lucky top ten cannot promote a head that cannot rank anything else.
+
+A head that fails any of these is not loaded at all — see
+`DurabilityModel.load()`. The fallback is enforced by the loader rather than by
+remembering to pass the right argument, and a model directory with no recorded
+backtest loads nothing, because unmeasured is not the same as good.
+
+### The label threshold sweep
+
+Decision C said to sweep 0.6 and record the winner. Swept over 0.4–0.8, the
++60d model precision@10 goes 1.00 / 0.50 / 0.80 / 1.00 / 0.70 — it is not
+monotonic, and 0.7 is "best" only in the sense that it happens to win on this
+test set. **Picking it for that reason would be selecting the label definition
+on the test metric, so 0.6 stands** as pre-registered. Re-run the sweep when
+the term count is large enough for the differences to mean something.
+
+### What this backtest cannot tell you
+
+**25 terms.** All 25 appear on both sides of the temporal split, so the split is
+temporal but *not* grouped by term, which this document asks for two sections
+above. With 25 terms, grouping would leave a handful on either side and measure
+nothing at all; the deviation is deliberate and recorded as decision 24. It
+means a term's own past informs its future here, and the true out-of-sample
+numbers are somewhere below the ones printed above.
+
+Treat this as a floor-clearing exercise, not a measurement of skill: it
+establishes that the pipeline is honest and that one horizon does not deserve
+the model. Re-run it once discovery has pushed the term count into the
+hundreds, and expect the numbers to move.
 
 ## Relevance model (personal)
 

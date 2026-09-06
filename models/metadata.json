@@ -1,0 +1,114 @@
+{
+  "features": [
+    "slope",
+    "acceleration",
+    "volatility",
+    "seasonality_amp",
+    "peak_relative",
+    "days_observed",
+    "source_breadth",
+    "source_correlation",
+    "magnitude_bucket"
+  ],
+  "horizons": {
+    "30": {
+      "n_train": 9999,
+      "n_test": 3084,
+      "positive_rate": 0.6712671267126713,
+      "auc": 0.7501943451077044,
+      "importance": {
+        "slope": -0.007880332620410902,
+        "acceleration": -0.006801064419845959,
+        "volatility": 0.14464796666026394,
+        "seasonality_amp": -0.005539774382703455,
+        "peak_relative": 0.016836350844176385,
+        "days_observed": 0.0,
+        "source_breadth": 0.0,
+        "source_correlation": -0.00011041305619285957,
+        "magnitude_bucket": 0.007893670241350436
+      }
+    },
+    "60": {
+      "n_train": 9999,
+      "n_test": 2345,
+      "positive_rate": 0.6421642164216421,
+      "auc": 0.6598981483907214,
+      "importance": {
+        "slope": -0.008947601291265261,
+        "acceleration": -0.0004047575384453328,
+        "volatility": 0.08630352012435272,
+        "seasonality_amp": 0.009207033262599062,
+        "peak_relative": 0.019426906406550693,
+        "days_observed": 0.0,
+        "source_breadth": 0.0,
+        "source_correlation": -0.00035883844337898375,
+        "magnitude_bucket": 0.0011886568919395213
+      }
+    },
+    "90": {
+      "n_train": 9999,
+      "n_test": 1595,
+      "positive_rate": 0.6585658565856586,
+      "auc": 0.6491787664422475,
+      "importance": {
+        "slope": -0.022323458220203117,
+        "acceleration": -0.016811518026629037,
+        "volatility": 0.09848960652433736,
+        "seasonality_amp": 0.008410864521572026,
+        "peak_relative": 0.019562968493155242,
+        "days_observed": 0.0,
+        "source_breadth": 0.0,
+        "source_correlation": 0.0006319112679403993,
+        "magnitude_bucket": -0.0009446027245001209
+      }
+    }
+  },
+  "backtest": {
+    "k": 10,
+    "verdict": "+30d  n=3084   base=0.58  model=1.00  momentum=1.00  random=0.59\n+60d  n=2345   base=0.49  model=0.80  momentum=0.90  random=0.47\n+90d  n=1595   base=0.38  model=0.90  momentum=0.30  random=0.36\n\nThe model beats momentum at some horizons but not at +30d, +60d. Use the model only where it wins; fall back elsewhere.",
+    "horizons": {
+      "30": {
+        "horizon": 30,
+        "n": 3084,
+        "k": 10,
+        "base_rate": 0.5800907911802854,
+        "model_precision": 1.0,
+        "momentum_precision": 1.0,
+        "random_precision": 0.586,
+        "tiebreak_k": 100,
+        "wide_model_precision": 0.98,
+        "wide_momentum_precision": 0.85,
+        "auc": 0.7501943451077044,
+        "use_model": true
+      },
+      "60": {
+        "horizon": 60,
+        "n": 2345,
+        "k": 10,
+        "base_rate": 0.48955223880597015,
+        "model_precision": 0.8,
+        "momentum_precision": 0.9,
+        "random_precision": 0.47350000000000003,
+        "tiebreak_k": 100,
+        "wide_model_precision": 0.81,
+        "wide_momentum_precision": 0.81,
+        "auc": 0.6598981483907214,
+        "use_model": false
+      },
+      "90": {
+        "horizon": 90,
+        "n": 1595,
+        "k": 10,
+        "base_rate": 0.3768025078369906,
+        "model_precision": 0.9,
+        "momentum_precision": 0.3,
+        "random_precision": 0.35600000000000004,
+        "tiebreak_k": 100,
+        "wide_model_precision": 0.64,
+        "wide_momentum_precision": 0.64,
+        "auc": 0.6491787664422475,
+        "use_model": true
+      }
+    }
+  }
+}
