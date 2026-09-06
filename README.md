@@ -199,10 +199,15 @@ contradicts the database discards the generation and retries. Two retries, each
 warmer than the last, then the row is written with `composed=0` and the run
 continues.
 
-Two things a live 8B model taught us, both now regression-tested: it copies any
-number you show it (the prompt therefore contains no example estimates), and
-given "where it is sold" it answers with whatever list it was last shown (the
-prompt therefore says a channel is a marketplace, not a technology).
+Three things a live 8B model taught us, all now regression-tested. It copies
+any number you show it, so the prompt contains no example estimates. Given
+"where it is sold" it answers with whatever list it was last shown, so the
+prompt defines a channel as a marketplace rather than a technology. And told
+what the feasibility gate wants, it produces exactly that -- $20 of setup for
+an idea it valued at $500 when not told -- so **the prompt does not carry the
+budget caps at all**. Feasibility is judged after the estimate, never supplied
+before it; with the caps removed the gate started rejecting 2 opportunities in
+8 instead of 0 in 11.
 
 M8 landed: the bot. Long polling, no webhook, no public IP.
 

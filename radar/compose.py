@@ -77,8 +77,9 @@ Hard rules:
   for example Gumroad, Fiverr, Etsy, Upwork, or your own landing page. It is
   NOT a technology and NOT an item from the build list above.
 - The team CANNOT do: {cannot_build}. Do not propose anything needing these.
-- Setup cost must be under ${max_setup} and the first sale within {max_ttfd} days.
-- price_usd divided by cost_per_sale_usd must be at least {min_margin}.
+- Two people are building this as a side project with no outside funding, so
+  it has to be something small they can start alone. Estimate the real numbers
+  for the idea you are proposing -- do not tune them to look acceptable.
 
 JSON shape, exactly these keys. Every <...> is a description of what to put
 there, not a value to copy:
@@ -360,15 +361,30 @@ def check_against_measurements(
     return problems
 
 
+# Budget thresholds the gate enforces. The prompt must not contain them: told
+# "setup under $100", qwen3:8b returned $20 for a term it valued at $500 when
+# not told, so the estimate became our own config read back to us and the gate
+# passed 11 of 11 because the model had been handed the passing criteria.
+GATE_THRESHOLD_FIELDS = ("max_setup", "min_margin", "max_ttfd")
+
+
+def leaks_gate_thresholds(template: str = "") -> list[str]:
+    """Gate thresholds that appear in the prompt. Should always be empty."""
+    template = template or PROMPT_TEMPLATE
+    return [name for name in GATE_THRESHOLD_FIELDS if "{" + name + "}" in template]
+
+
 def build_prompt(bundle: MeasuredBundle, cfg, caps: feasibility.Capabilities) -> str:
-    budget = cfg.get("budget", {}) or {}
+    """The prompt deliberately does not carry the budget caps.
+
+    The gate exists to reject; a model told what the gate wants will produce it,
+    and a card would then print our own thresholds back at us with "(est.)"
+    beside them. Feasibility is judged after the estimate, not before it.
+    """
     return PROMPT_TEMPLATE.format(
         term=bundle.term,
         can_build=", ".join(caps.can_build[:12]) or "software",
         cannot_build=", ".join(caps.cannot_build) or "nothing",
-        max_setup=budget.get("max_setup_usd", 100),
-        max_ttfd=budget.get("max_ttfd_days", 7),
-        min_margin=budget.get("min_margin_multiple", 3.0),
     )
 
 

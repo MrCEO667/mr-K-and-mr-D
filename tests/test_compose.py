@@ -338,3 +338,25 @@ def test_the_prompt_tells_the_model_what_a_channel_is():
     scraping and Telegram bot". A channel is where a buyer pays."""
     assert "marketplace" in compose.PROMPT_TEMPLATE
     assert "NOT a technology" in compose.PROMPT_TEMPLATE
+
+
+def test_the_prompt_does_not_hand_the_model_the_gate_thresholds():
+    """Told "setup must be under $100", qwen3:8b estimated $20 for a term it
+    valued at $500 when not told -- so the "(est.)" figure on the card was our
+    own config read back, and the gate passed every opportunity because the
+    model had been given the passing criteria. Feasibility is judged after the
+    estimate, not supplied before it."""
+    assert compose.leaks_gate_thresholds() == []
+    assert "$100" not in compose.PROMPT_TEMPLATE
+    assert compose.leaks_gate_thresholds("cap is {max_setup}") == ["max_setup"]
+
+
+def test_build_prompt_still_works_without_the_budget_block():
+    class NoBudget:
+        def get(self, dotted, default=None):
+            return default
+
+    prompt = compose.build_prompt(
+        compose.MeasuredBundle(term="x", term_id=1), NoBudget(), CAPS
+    )
+    assert "x" in prompt
