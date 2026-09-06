@@ -189,8 +189,24 @@ history:**
 | google_trends | 720 | 18,000 |
 | youtube, hackernews, github, product_hunt | **1** | 25-150 each |
 
-Trends backfills two years on demand; the others only ever report today, and
-there is no historical endpoint to ask. So across all 15,374 training windows
+Trends backfills two years on demand; the others are collected by the daily
+sweep and so far have one day each.
+
+That is a *collection* gap, not always an API one, and the distinction was
+initially recorded here too pessimistically. Hacker News can in fact be
+backfilled cheaply: the Algolia endpoint takes `numericFilters=created_at_i>..
+,created_at_i<..` and serves historical stories for free with no key, verified
+against a January 2026 window. Roughly 25 terms x 104 weekly buckets is ~2,600
+free requests, an hour of wall clock. YouTube can do it in principle via
+`publishedAfter`/`publishedBefore` but not in practice -- 100 quota units per
+search against a 10,000/day budget is 26 days of quota for the same span.
+GitHub exposes repo creation dates but not historical star counts.
+
+So one source is genuinely reachable and would make both features vary for the
+Trends x HN pair. It is not done yet because the tool has no end-to-end output
+so far and M7/M8 buy more than a better feature does. Decision 34.
+
+So across all 15,374 training windows
 `source_breadth` is **constant 1** and `source_correlation` is **constant
 0.0**. They are not weak features, they are absent ones, and a constant column
 cannot inform a split.
@@ -199,10 +215,10 @@ This matters more than an importance of zero suggests, because the section
 above claims cross-source breadth is "the feature most likely to earn its
 keep". **That claim is currently untestable.** The durability model is, today,
 a Google-Trends-shape model with seven live features. The two cross-source
-features will start carrying information once the daily sweeps have
-accumulated a few months of their own history, and the backtest should be
-re-run then -- not because the code changed, but because the data will finally
-exist. Decision 31.
+features start carrying information either when a Hacker News backfill lands
+(about an hour of work, see above) or when the daily sweeps accumulate their
+own history. Re-run the backtest then -- not because the code changed, but
+because the data will finally exist. Decision 31.
 
 ### What this backtest cannot tell you
 

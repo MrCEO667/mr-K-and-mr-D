@@ -42,6 +42,15 @@ def test_dry_run_writes_nothing(cfg_path, tmp_path):
     assert rows(tmp_path, "runs") == []
 
 
+def test_dry_run_writes_no_scores_either(cfg_path, tmp_path):
+    """Regression. `db.run` owns one transaction for the whole run; a stage
+    that commits its own writes ends it early, so the run's ROLLBACK fails and
+    --dry-run -- which promises to write nothing -- has already written."""
+    assert runner.main(["--once", "--dry-run", "--config", str(cfg_path)]) == 0
+    for table in ("runs", "scores", "opportunities", "signal_snapshots", "terms"):
+        assert rows(tmp_path, table) == [], f"{table} was written during a dry run"
+
+
 def test_without_once_it_refuses_rather_than_looping(cfg_path):
     assert runner.main(["--config", str(cfg_path)]) == 2
 

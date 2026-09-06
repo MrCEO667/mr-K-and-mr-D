@@ -174,5 +174,35 @@ Payment rails stay unenforced (open decision A): the rail is detected and
 printed for the Requirements line, and flipping `enforce: true` in
 `config/payment_rails.yaml` turns it into a gate.
 
-M7 (the LLM composer) is next, and it is what produces the opportunities this
-gate reads.
+M7 landed: the composite scorer and the LLM composer. The pipeline now runs
+end to end -- collect, count supply, score, compose, gate, persist.
+
+```bash
+python -m radar --once                              # collect + score
+python -m radar --once --compose --compose-limit 3  # also write playbooks
+```
+
+Composing needs Ollama running locally and takes 20-40s per term, so it is
+opt-in and only the top-scoring terms get composed.
+
+`radar/score.py` ranks terms on `w_d*durability + w_s*(1-saturation) +
+w_r*relevance`. The feasibility gate is not a weight in that sum -- it applies
+to a composed opportunity, because setup cost and margin do not exist until
+there is a playbook. Every `scores` row records what produced its durability
+number, and today that reads `momentum_fallback` at the configured horizon,
+which is M5's verdict showing up in live output rather than only in a document.
+
+`radar/compose.py` holds the measured/estimated line. Measured numbers are read
+from SQLite and template-injected; the LLM never sees a slot for them, and
+`find_measured_claims()` re-reads the prose afterwards so a figure that
+contradicts the database discards the generation and retries. Two retries, each
+warmer than the last, then the row is written with `composed=0` and the run
+continues.
+
+Two things a live 8B model taught us, both now regression-tested: it copies any
+number you show it (the prompt therefore contains no example estimates), and
+given "where it is sold" it answers with whatever list it was last shown (the
+prompt therefore says a channel is a marketplace, not a technology).
+
+M8 (the Telegram bot) is next, and it is what finally puts these cards in front
+of the operators.

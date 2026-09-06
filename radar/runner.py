@@ -14,8 +14,10 @@ import sqlite3
 import sys
 from collections.abc import Sequence
 
+from . import compose as compose_mod
 from . import config as config_module
-from . import db, discover, log, saturation
+from . import db, discover, feasibility, log, saturation
+from . import score as score_mod
 from .cache import Cache
 from .collectors.base import RateLimiter, SourceHealth, SourceUnavailable
 from .collectors.github import GitHubCollector
@@ -28,7 +30,13 @@ from .collectors.youtube import YouTubeCollector
 
 # Stages still to land keep their place in the list so the shape of a run is
 # visible from the logs before the code exists.
-PENDING_STAGES = ("score", "compose", "deliver")
+PENDING_STAGES = ("deliver",)
+
+# Composing is the slow part of a run: a local 8B model takes 20-40 seconds per
+# term on this hardware, so a full sweep would sit in the LLM for a quarter of
+# an hour. Only the best few terms are worth that, and the rest are scored and
+# left for the next run.
+DEFAULT_COMPOSE_LIMIT = 5
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,6 +65,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="mine new terms from Hacker News titles before collecting (opt-in: "
         "harvest quality is unproven and each new term costs quota every sweep)",
+    )
+    parser.add_argument(
+        "--compose",
+        action="store_true",
+        help="compose playbooks for the top-scoring terms with the local LLM "
+        "(off by default: it needs Ollama running and takes ~30s per term)",
+    )
+    parser.add_argument(
+        "--compose-limit",
+        type=int,
+        default=DEFAULT_COMPOSE_LIMIT,
+        help=f"how many top terms to compose (default: {DEFAULT_COMPOSE_LIMIT})",
     )
     parser.add_argument("--config", default=None, help="path to config.yaml")
     parser.add_argument("--log-level", default="INFO")
@@ -214,6 +234,7 @@ def execute(
     *,
     dry_run: bool,
     harvest: bool = False,
+    compose_limit: int = 0,
 ) -> str:
     """Open a run and walk the stages that exist."""
     with db.run(conn, kind, dry_run=dry_run) as run_id:
@@ -237,9 +258,68 @@ def execute(
         supply = saturation.collect_saturation(conn, counters, terms, run_id)
         logger.info("supply counted", extra={"rows": supply})
 
+        scores = score_mod.score_terms(conn, cfg, terms)
+        score_mod.write_scores(conn, run_id, scores)
+        logger.info(
+            "terms scored",
+            extra={
+                "count": len(scores),
+                "top": [
+                    {"term_id": s.term_id, "composite": round(s.composite, 3)}
+                    for s in scores[:5]
+                ],
+            },
+        )
+
+        if compose_limit > 0 and scores:
+            composed = run_composer(conn, cfg, scores, terms, run_id, limit=compose_limit)
+            logger.info("opportunities composed", extra=composed)
+        else:
+            logger.info("stage skipped", extra={"stage": "compose", "why": "not requested"})
+
         for stage in PENDING_STAGES:
             logger.info("stage skipped, not implemented yet", extra={"stage": stage})
         return run_id
+
+
+def run_composer(
+    conn: sqlite3.Connection,
+    cfg: config_module.Config,
+    scores,
+    terms,
+    run_id: str,
+    *,
+    limit: int,
+) -> dict:
+    """Compose the top `limit` scored terms and persist every result.
+
+    One dead generation must not end a run, exactly as one dead source must
+    not. A term that cannot be composed is written with composed=0 and the
+    next term is attempted.
+    """
+    logger = log.get(__name__, run_id=run_id)
+    names = {t.id: t.term for t in terms}
+    client = compose_mod.Ollama(
+        base_url=cfg.get("llm.base_url", "http://localhost:11434"),
+        model=cfg.get("llm.model", "qwen3:8b"),
+        timeout_s=float(cfg.get("llm.timeout_s", 120)),
+    )
+    caps = feasibility.Capabilities.load()
+
+    written = feasible = failed = 0
+    for score in scores[:limit]:
+        result = compose_mod.compose_one(
+            conn, cfg, score, names.get(score.term_id, ""), client, caps=caps
+        )
+        compose_mod.write_opportunity(conn, run_id, result)
+        written += 1
+        if not result.composed:
+            failed += 1
+        elif result.verdict and result.verdict.passed:
+            feasible += 1
+    if failed:
+        logger.warning("some terms could not be composed", extra={"failed": failed})
+    return {"written": written, "feasible": feasible, "not_composed": failed}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -263,7 +343,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             logger.error("refusing to run: a source is enabled but cannot authenticate")
             return 1
         run_id = execute(
-            conn, cfg, args.kind, dry_run=args.dry_run, harvest=args.harvest
+            conn,
+            cfg,
+            args.kind,
+            dry_run=args.dry_run,
+            harvest=args.harvest,
+            compose_limit=args.compose_limit if args.compose else 0,
         )
     finally:
         conn.close()
