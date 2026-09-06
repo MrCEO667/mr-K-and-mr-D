@@ -144,4 +144,30 @@ The verdict is recorded in `models/metadata.json` and enforced by
 `DurabilityModel.load()`: a head that lost is never loaded, and a model with no
 recorded backtest is not loaded at all.
 
-M6 (feasibility gate) is next.
+M6 landed: the feasibility gate. Rules, no ML, reading `config/config.yaml`
+and `config/capabilities.yaml`.
+
+Five hard rules -- setup cost, margin multiple, time to first dollar, no
+inventory or manufacturing, nothing else on `cannot_build`. A failure is a
+result, not a deletion: every rejection carries a machine code and a sentence,
+and `Verdict.as_row()` gives the `feasible` / `feasible_reasons` columns so
+rejected opportunities stay in the database for M9 to learn from.
+
+```python
+from radar import config, feasibility
+verdict = feasibility.evaluate(opportunity, config.load())
+verdict.passed, verdict.reasons, verdict.margin_multiple
+```
+
+Two things it deliberately does *not* do. It never rejects for failing to
+prove the team can build something -- only for evidence of a blocker, since
+`can_build` is broad by design (decision 27). And a missing estimate is a
+rejection rather than a pass (decision 28), because a missing setup cost is
+not a cheap one.
+
+Payment rails stay unenforced (open decision A): the rail is detected and
+printed for the Requirements line, and flipping `enforce: true` in
+`config/payment_rails.yaml` turns it into a gate.
+
+M7 (the LLM composer) is next, and it is what produces the opportunities this
+gate reads.
