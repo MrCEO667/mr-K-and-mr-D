@@ -141,7 +141,10 @@ CREATE TABLE IF NOT EXISTS alerts (
   id             INTEGER PRIMARY KEY,
   opportunity_id INTEGER NOT NULL REFERENCES opportunities(id),
   sent_ts        INTEGER NOT NULL,
-  score_at_send  REAL NOT NULL
+  score_at_send  REAL NOT NULL,
+  -- Suppression re-alerts on a saturation *change*, so the label at send time
+  -- has to be remembered; deriving it later from the nearest scores row guesses.
+  saturation_at_send TEXT
 );
 
 -- ---------------------------------------------------------- source health

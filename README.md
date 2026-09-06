@@ -204,5 +204,34 @@ number you show it (the prompt therefore contains no example estimates), and
 given "where it is sold" it answers with whatever list it was last shown (the
 prompt therefore says a channel is a marketplace, not a technology).
 
-M8 (the Telegram bot) is next, and it is what finally puts these cards in front
-of the operators.
+M8 landed: the bot. Long polling, no webhook, no public IP.
+
+```bash
+python -m radar.bot            # poll and answer
+python -m radar.bot --send     # push any cards due, then keep polling
+```
+
+Two operators share one supergroup, and a supergroup is joinable, so **the
+allowlist is the whole access control** -- applied to every update including
+callback queries, because a button is as much an entry point as a command.
+
+Cards carry `👁 Watch` / `✕ Dismiss` / `📄 Why`. Dismiss asks for a reason from
+a fixed list; each answer is a labelled row M9 will train on. First tap settles
+a card: a second tap writes nothing and answers with who decided it and when,
+because overwriting would destroy exactly the disagreement between two
+operators that M9 needs to be able to see.
+
+Suppression lives in `radar/alerts.py`: an opportunity alerts once, and
+re-alerts only if its composite moves past `alerts.rescore_delta` or its
+saturation label changes. A dismissal is permanent except for `too_slow`, which
+is a statement about timing rather than about the idea.
+
+`radar/card.py` renders the card, and its tests exist for one rule from
+contracts.md section 5: every estimated figure carries `(est.)` and every
+measured one does not. A card whose durability came from the momentum fallback
+says `momentum` on its face.
+
+First live run: two cards delivered, both tapped, two `decisions` rows written
+with the right `actor_tg_id`.
+
+M9 (the relevance model) and M10 (outcomes) are what remain.

@@ -38,12 +38,37 @@ def connect(db_path: Path | str, *, init: bool = True) -> sqlite3.Connection:
     return conn
 
 
+# Columns added to a table that already shipped. CREATE TABLE IF NOT EXISTS
+# does nothing to an existing table, so a new column would be present on a
+# fresh checkout and missing on the developer's live database -- which is the
+# machine that matters, since it holds two years of backfilled history.
+ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("alerts", "saturation_at_send", "TEXT"),
+)
+
+
 def init_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> None:
-    """Apply schema.sql. Every statement is CREATE ... IF NOT EXISTS, so this
-    is safe on an existing database and is the closest thing to a migration
-    the project has until something actually needs altering."""
+    """Apply schema.sql, then add any column an existing database is missing.
+
+    Every statement in schema.sql is CREATE ... IF NOT EXISTS, so it is safe to
+    re-run. `ADDED_COLUMNS` covers the case that does not: a column added to a
+    table that already exists locally.
+    """
     sql = (schema_path or SCHEMA_PATH).read_text(encoding="utf-8")
     conn.executescript(sql)
+    apply_added_columns(conn)
+
+
+def apply_added_columns(conn: sqlite3.Connection) -> list[str]:
+    """Idempotent ALTER TABLE ADD COLUMN for columns added after first ship."""
+    applied = []
+    for table, column, declaration in ADDED_COLUMNS:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing or column in existing:
+            continue
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+        applied.append(f"{table}.{column}")
+    return applied
 
 
 def new_run_id() -> str:
